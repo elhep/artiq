@@ -21,6 +21,25 @@ from artiq.build_soc import build_artiq_soc, add_identifier
 from artiq.gateware.rtio.phy.ttl_simple import Output
 
 
+iostd_single = {
+    "fmc1_LA": "LVCMOS25",
+    "fmc1_HA": "LVCMOS25",
+    "fmc1_HB": "LVCMOS25",
+    "fmc2_LA": "LVCMOS25",
+    "fmc2_HA": "LVCMOS25",
+    "fmc2_HB": "LVCMOS18"
+}
+
+iostd_diff = {
+    "fmc1_LA": "LVDS25",
+    "fmc1_HA": "LVDS25",
+    "fmc1_HB": "LVDS25",
+    "fmc2_LA": "LVDS25",
+    "fmc2_HA": "LVDS25",
+    "fmc2_HB": "LVDS18"
+}
+
+
 class CRG(Module):
     def __init__(self, platform):
         self.clock_domains.cd_sys = ClockDomain()
@@ -146,10 +165,7 @@ class StandaloneBase(MiniSoC, AMPSoC):
         self.config["I2C_BUS_COUNT"] = 1
 
         self.rtio_channels = []
-
-        led_outputs = [Output(self.platform.request("led", i)) for i in range(1)]
-        self.submodules += led_outputs
-        self.rtio_channels += [rtio.Channel.from_phy(phy) for phy in led_outputs]
+        self.add_design()
 
         self.config["RTIO_FREQUENCY"] = "125.0"
 
@@ -158,6 +174,9 @@ class StandaloneBase(MiniSoC, AMPSoC):
         self.rtio_channels.append(rtio.LogChannel())
 
         self.add_rtio(self.rtio_channels)
+
+    def add_design(self):
+        pass
 
     def add_rtio(self, rtio_channels):
         fix_serdes_timing_path(self.platform)
