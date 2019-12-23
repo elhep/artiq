@@ -31,12 +31,12 @@ iostd_single = {
 }
 
 iostd_diff = {
-    "fmc1_LA": "LVDS25",
-    "fmc1_HA": "LVDS25",
-    "fmc1_HB": "LVDS25",
-    "fmc2_LA": "LVDS25",
-    "fmc2_HA": "LVDS25",
-    "fmc2_HB": "LVDS18"
+    "fmc1_LA": "LVDS_25",
+    "fmc1_HA": "LVDS_25",
+    "fmc1_HB": "LVDS_25",
+    "fmc2_LA": "LVDS_25",
+    "fmc2_HA": "LVDS_25",
+    "fmc2_HB": "LVDS"
 }
 
 
@@ -152,20 +152,15 @@ class StandaloneBase(MiniSoC, AMPSoC):
         AMPSoC.__init__(self)
         add_identifier(self)
 
-        self.submodules.testmod = TestMod()
-        self.csr_devices.append("testmod")
-        self.comb += [
-            self.platform.request("led", 1).eq(self.testmod.ledb.storage),
-            self.platform.request("led", 2).eq(self.testmod.ledg.storage),
-        ]
-
         i2c = self.platform.request("i2c")
         self.submodules.i2c = gpio.GPIOTristate([i2c.scl, i2c.sda])
         self.csr_devices.append("i2c")
         self.config["I2C_BUS_COUNT"] = 1
 
         self.rtio_channels = []
+        self.rtio_channel_labels = []
         self.add_design()
+        self.print_rtio_channels()
 
         self.config["RTIO_FREQUENCY"] = "125.0"
 
@@ -173,10 +168,27 @@ class StandaloneBase(MiniSoC, AMPSoC):
         self.config["RTIO_LOG_CHANNEL"] = len(self.rtio_channels)
         self.rtio_channels.append(rtio.LogChannel())
 
+
         self.add_rtio(self.rtio_channels)
+
+    def add_rtio_channels(self, channels, names):
+        if not isinstance(channels, list):
+            channels = [channels]
+        if not isinstance(names, list):
+            names = [names]
+        self.rtio_channels += channels
+        self.rtio_channel_labels += names
 
     def add_design(self):
         pass
+
+    def print_rtio_channels(self):
+        if len(self.rtio_channels) == len(self.rtio_channel_labels):
+            print("RTIO channels:")
+            for ch, label in enumerate(self.rtio_channel_labels):
+                print(" - {:3d} : {}".format(ch, label))
+        else:
+            print("Invalid labels length")
 
     def add_rtio(self, rtio_channels):
         fix_serdes_timing_path(self.platform)
