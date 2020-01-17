@@ -207,6 +207,77 @@ class Programmer:
         self._script = []
 
 
+class ProgrammerScanstaXC7(Programmer):
+    _sector_size = 0x40000
+
+    import textwrap
+    scansta_switch = textwrap.dedent("""\
+                ! Example code taken from TI tutorial
+                TRST ON;
+                TRST OFF;
+                SIR 8 TDI (00); ! AddressScanBridge
+                SIR 8 TDI (A0); ! Loadinstruction to enable transparent mode for LSP0
+                SIR 8 TDI (a5); ! Verify SIR
+                SDR 8 TDI (5a); ! Verify SDR
+                SIR 8 TDI (C3); ! Try to load GOTOWAIT in ScanBridge
+                SDR 8 TDI (5a); ! Verify that ScanBridge did not recognize GOTOWAIT""")
+
+    def __init__(self, client, preinit_script):
+        Programmer.__init__(self, client, preinit_script)
+        self._proxy = "bscan_spi_xc7k325t.bit"
+
+        add_commands(self._board_script,
+                     "adapter_khz 2000",
+                     "source {}".format(self._transfer_script("interface/ftdi/digilent_jtag_hs3.cfg")),
+                     "transport select jtag",
+                     "source {}".format(self._transfer_script("cpld/xilinx-xc7.cfg")),
+                     "source {}".format(self._transfer_script("cpld/jtagspi.cfg")))
+        self.add_flash_bank("spi0", "xc7", index=0)
+
+    def _add_flash_bank(self, name, tap, index):
+        add_commands(self._script,
+                     "target create {tap}.{name}.proxy testee -chain-position {tap}.tap",
+                     "flash bank {name} jtagspi 0 0 0 0 {tap}.{name}.proxy {ir:#x}",
+                     tap=tap, name=name, ir=0x02 + index)
+
+    def _switch_scansta(self):
+        """
+        Switch SCANSTA to forward JTAG to FPGA.
+        """
+
+        import tempfile
+        tmp_file = tempfile.NamedTemporaryFile('w', delete=False)
+        tmp_file.write(self.scansta_switch)
+        tmp_file.close()
+
+        add_commands(self._script,
+                     "svf {}".format(self._transfer_script(tmp_file.name)))
+        self.run()
+
+        os.unlink(tmp_file.name)
+
+        # We need to execute svf before init takes place, so to be consistent with other programmers
+        # let's add init here
+        add_commands(self._script, "init")
+
+    def load(self, bitfile, pld):
+        self._switch_scansta()
+        super().load(bitfile, pld)
+
+    def load_proxy(self):
+        self._switch_scansta()
+        super().load(find_proxy_bitfile(self._proxy), pld=0)
+
+    def write_binary(self, bankname, address, filename):
+        self._switch_scansta()
+        super().write_binary(bankname, address, filename)
+
+    def start(self):
+        self._switch_scansta()
+        add_commands(self._script,
+                     "xc7_program xc7.tap")
+
+
 class ProgrammerXC7(Programmer):
     _sector_size = 0x10000
 
@@ -333,6 +404,13 @@ def main():
             "storage":      ("spi0", 0xb30000),
             "firmware":     ("spi0", 0xb40000),
         },
+        "afck1v1": {
+            "programmer": ProgrammerScanstaXC7,
+            "gateware":   ("spi0", 0x000000),
+            "bootloader": ("spi0", 0x800000),
+            "storage":    ("spi0", 0x840000),
+            "firmware":   ("spi0", 0x880000),
+        }
     }[args.target]
 
     bin_dir = args.dir

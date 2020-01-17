@@ -146,7 +146,7 @@ class StandaloneBase(MiniSoC, AMPSoC):
                          l2_size=128*1024,
                          ethmac_nrxslots=4,
                          ethmac_ntxslots=4,
-                         cpu_reset_address=0x500000,
+                         cpu_reset_address=0x800000,
                          crg=CRG,
                          **kwargs)
         AMPSoC.__init__(self)
@@ -167,7 +167,6 @@ class StandaloneBase(MiniSoC, AMPSoC):
         self.config["HAS_RTIO_LOG"] = None
         self.config["RTIO_LOG_CHANNEL"] = len(self.rtio_channels)
         self.rtio_channels.append(rtio.LogChannel())
-
 
         self.add_rtio(self.rtio_channels)
 
