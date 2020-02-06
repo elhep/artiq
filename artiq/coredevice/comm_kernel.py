@@ -2,12 +2,12 @@ import struct
 import logging
 import traceback
 import numpy
+import socket
 from enum import Enum
 from fractions import Fraction
 from collections import namedtuple
 
 from artiq.coredevice import exceptions
-from artiq.coredevice.comm import initialize_connection
 from artiq import __version__ as software_version
 
 
@@ -78,10 +78,11 @@ class CommKernel:
         self.host = host
         self.port = port
 
-    def open(self, **kwargs):
+    def open(self):
         if hasattr(self, "socket"):
             return
-        self.socket = initialize_connection(self.host, self.port, **kwargs)
+        self.socket = socket.create_connection((self.host, self.port))
+        logger.debug("connected to %s:%d", self.host, self.port)
         self.socket.sendall(b"ARTIQ coredev\n")
 
     def close(self):
@@ -408,7 +409,7 @@ class CommKernel:
         args, kwargs = self._receive_rpc_args(embedding_map)
         return_tags  = self._read_bytes()
 
-        if service_id is 0:
+        if service_id == 0:
             service  = lambda obj, attr, value: setattr(obj, attr, value)
         else:
             service  = embedding_map.retrieve_object(service_id)

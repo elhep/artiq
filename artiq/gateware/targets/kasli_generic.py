@@ -64,13 +64,17 @@ def peripheral_sampler(module, peripheral):
 def peripheral_suservo(module, peripheral):
     if len(peripheral["sampler_ports"]) != 2:
         raise ValueError("wrong number of Sampler ports")
+    urukul_ports = []
     if len(peripheral["urukul0_ports"]) != 2:
         raise ValueError("wrong number of Urukul #0 ports")
-    if len(peripheral["urukul1_ports"]) != 2:
-        raise ValueError("wrong number of Urukul #1 ports")
+    urukul_ports.append(peripheral["urukul0_ports"])
+    if "urukul1_ports" in peripheral:
+        if len(peripheral["urukul1_ports"]) != 2:
+            raise ValueError("wrong number of Urukul #1 ports")
+        urukul_ports.append(peripheral["urukul1_ports"])
     eem.SUServo.add_std(module,
         peripheral["sampler_ports"],
-        peripheral["urukul0_ports"], peripheral["urukul1_ports"])
+        urukul_ports)
 
 
 def peripheral_zotino(module, peripheral):
@@ -95,16 +99,33 @@ def peripheral_grabber(module, peripheral):
     eem.Grabber.add_std(module, port, port_aux, port_aux2)
 
 
+def peripheral_mirny(module, peripheral):
+    if len(peripheral["ports"]) != 1:
+        raise ValueError("wrong number of ports")
+    eem.Mirny.add_std(module, peripheral["ports"][0],
+        ttl_serdes_7series.Output_8X)
+
+
+def peripheral_fastino(module, peripheral):
+    if len(peripheral["ports"]) != 1:
+        raise ValueError("wrong number of ports")
+    eem.Fastino.add_std(module, peripheral["ports"][0])
+
+
+peripheral_processors = {
+    "dio": peripheral_dio,
+    "urukul": peripheral_urukul,
+    "novogorny": peripheral_novogorny,
+    "sampler": peripheral_sampler,
+    "suservo": peripheral_suservo,
+    "zotino": peripheral_zotino,
+    "grabber": peripheral_grabber,
+    "mirny": peripheral_mirny,
+    "fastino": peripheral_fastino,
+}
+
+
 def add_peripherals(module, peripherals):
-    peripheral_processors = {
-        "dio": peripheral_dio,
-        "urukul": peripheral_urukul,
-        "novogorny": peripheral_novogorny,
-        "sampler": peripheral_sampler,
-        "suservo": peripheral_suservo,
-        "zotino": peripheral_zotino,
-        "grabber": peripheral_grabber,
-    }
     for peripheral in peripherals:
         peripheral_processors[peripheral["type"]](module, peripheral)
 

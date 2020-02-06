@@ -30,76 +30,76 @@ class I2CMasterMachine(Module):
         self.sda_i = Signal()
 
         self.submodules.cg  = CEInserter()(I2CClockGen(clock_width))
-        self.idle  = Signal()
         self.start = Signal()
         self.stop  = Signal()
         self.write = Signal()
-        self.read  = Signal()
         self.ack   = Signal()
         self.data  = Signal(8)
+        self.ready = Signal()
 
         ###
 
-        busy = Signal()
         bits = Signal(4)
+        data = Signal(8)
 
         fsm = CEInserter()(FSM("IDLE"))
         self.submodules += fsm
 
         fsm.act("IDLE",
+            self.ready.eq(1),
             If(self.start,
                 NextState("START0"),
-            ).Elif(self.stop & self.start,
-                NextState("RESTART0"),
             ).Elif(self.stop,
                 NextState("STOP0"),
             ).Elif(self.write,
                 NextValue(bits, 8),
-                NextState("WRITE0"),
-            ).Elif(self.read,
-                NextValue(bits, 8),
-                NextState("READ0"),
+                NextValue(data, self.data),
+                NextState("WRITE0")
             )
         )
 
         fsm.act("START0",
             NextValue(self.scl, 1),
-            NextState("START1"))
+            NextState("START1")
+        )
         fsm.act("START1",
             NextValue(self.sda_o, 0),
-            NextState("IDLE"))
-
-        fsm.act("RESTART0",
-            NextValue(self.scl, 0),
-            NextState("RESTART1"))
-        fsm.act("RESTART1",
-            NextValue(self.sda_o, 1),
-            NextState("START0"))
+            NextState("IDLE")
+        )
 
         fsm.act("STOP0",
             NextValue(self.scl, 0),
-            NextState("STOP1"))
+            NextState("STOP1")
+        )
         fsm.act("STOP1",
-            NextValue(self.scl, 1),
             NextValue(self.sda_o, 0),
-            NextState("STOP2"))
+            NextState("STOP2")
+        )
         fsm.act("STOP2",
+            NextValue(self.scl, 1),
+            NextState("STOP3")
+        )
+        fsm.act("STOP3",
             NextValue(self.sda_o, 1),
-            NextState("IDLE"))
+            NextState("IDLE")
+        )
 
         fsm.act("WRITE0",
             NextValue(self.scl, 0),
+            NextState("WRITE1")
+        )
+        fsm.act("WRITE1",
             If(bits == 0,
                 NextValue(self.sda_o, 1),
                 NextState("READACK0"),
             ).Else(
-                NextValue(self.sda_o, self.data[7]),
-                NextState("WRITE1"),
+                NextValue(self.sda_o, data[7]),
+                NextState("WRITE2"),
             )
         )
-        fsm.act("WRITE1",
+        fsm.act("WRITE2",
             NextValue(self.scl, 1),
-            NextValue(self.data[1:], self.data[:-1]),
+            NextValue(data[1:], data[:-1]),
             NextValue(bits, bits - 1),
             NextState("WRITE0"),
         )
@@ -112,37 +112,12 @@ class I2CMasterMachine(Module):
             NextState("IDLE")
         )
 
-        fsm.act("READ0",
-            NextValue(self.scl, 0),
-            NextState("READ1"),
-        )
-        fsm.act("READ1",
-            NextValue(self.data[0], self.sda_i),
-            NextValue(self.scl, 0),
-            If(bits == 0,
-                NextValue(self.sda_o, ~self.ack),
-                NextState("WRITEACK0"),
-            ).Else(
-                NextValue(self.sda_o, 1),
-                NextState("READ2"),
-            )
-        )
-        fsm.act("READ2",
-            NextValue(self.scl, 1),
-            NextValue(self.data[:-1], self.data[1:]),
-            NextValue(bits, bits - 1),
-            NextState("READ1"),
-        )
-        fsm.act("WRITEACK0",
-            NextValue(self.scl, 1),
-            NextState("IDLE"),
-        )
-
         run = Signal()
+        idle = Signal()
         self.comb += [
-            run.eq(self.start | self.stop | self.write | self.read),
-            self.idle.eq(~run & fsm.ongoing("IDLE")),
-            self.cg.ce.eq(~self.idle),
+            run.eq(self.start | self.stop | self.write),
+            idle.eq(~run & fsm.ongoing("IDLE")),
+            self.cg.ce.eq(~idle),
             fsm.ce.eq(run | self.cg.clk2x),
         ]
 
@@ -175,6 +150,102 @@ class ADPLLProgrammer(Module):
             master.sda_i.eq(self.sda_i),
             self.sda_o.eq(master.sda_o)
         ]
+
+        fsm = FSM()
+        self.submodules += fsm
+
+        adpll = Signal.like(self.adpll)
+
+        fsm.act("IDLE",
+            If(self.stb,
+                NextValue(adpll, self.adpll),
+                NextState("START")
+            )
+        )
+        fsm.act("START",
+            master.start.eq(1),
+            If(master.ready, NextState("DEVADDRESS"))
+        )
+        fsm.act("DEVADDRESS",
+            master.data.eq(self.i2c_address << 1),
+            master.write.eq(1),
+            If(master.ready, NextState("REGADRESS"))
+        )
+        fsm.act("REGADRESS",
+            master.data.eq(231),
+            master.write.eq(1),
+            If(master.ready,
+                If(master.ack,
+                    NextState("DATA0")
+                ).Else(
+                    self.nack.eq(1),
+                    NextState("STOP")
+                )
+            )
+        )
+        fsm.act("DATA0",
+            master.data.eq(adpll[0:8]),
+            master.write.eq(1),
+            If(master.ready,
+                If(master.ack,
+                    NextState("DATA1")
+                ).Else(
+                    self.nack.eq(1),
+                    NextState("STOP")
+                )
+            )
+        )
+        fsm.act("DATA1",
+            master.data.eq(adpll[8:16]),
+            master.write.eq(1),
+            If(master.ready,
+                If(master.ack,
+                    NextState("DATA2")
+                ).Else(
+                    self.nack.eq(1),
+                    NextState("STOP")
+                )
+            )
+        )
+        fsm.act("DATA2",
+            master.data.eq(adpll[16:24]),
+            master.write.eq(1),
+            If(master.ready,
+                If(~master.ack, self.nack.eq(1)),
+                NextState("STOP")
+            )
+        )
+        fsm.act("STOP",
+            master.stop.eq(1),
+            If(master.ready,
+                If(~master.ack, self.nack.eq(1)),
+                NextState("IDLE")
+            )
+        )
+
+        self.comb += self.busy.eq(~fsm.ongoing("IDLE"))
+
+
+def simulate_programmer():
+    from migen.sim.core import run_simulation
+
+    dut = ADPLLProgrammer()
+
+    def generator():
+        yield dut.i2c_divider.eq(4)
+        yield dut.i2c_address.eq(0x55)
+        yield
+        yield dut.adpll.eq(0x123456)
+        yield dut.stb.eq(1)
+        yield
+        yield dut.stb.eq(0)
+        yield
+        while (yield dut.busy):
+            yield
+        for _ in range(20):
+            yield
+
+    run_simulation(dut, generator(), vcd_name="tb.vcd")
 
 
 class Si549(Module, AutoCSR):
@@ -263,3 +334,7 @@ class Si549(Module, AutoCSR):
                 If(self.errors.re & self.errors.r[n], self.errors.w[n].eq(0)),
                 If(trig, self.errors.w[n].eq(1))
             ]
+
+
+if __name__ == "__main__":
+    simulate_programmer()

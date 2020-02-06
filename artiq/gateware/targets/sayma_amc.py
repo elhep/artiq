@@ -19,7 +19,7 @@ from artiq.gateware import jesd204_tools
 from artiq.gateware.rtio.phy import ttl_simple, ttl_serdes_ultrascale, sawg
 from artiq.gateware.drtio.transceiver import gth_ultrascale
 from artiq.gateware.drtio.siphaser import SiPhaser7Series
-from artiq.gateware.drtio.wrpll import WRPLL
+from artiq.gateware.drtio.wrpll import WRPLL, DDMTDSamplerExtFF
 from artiq.gateware.drtio.rx_synchronizer import XilinxRXSynchronizer
 from artiq.gateware.drtio import *
 from artiq.build_soc import *
@@ -129,6 +129,7 @@ class SatelliteBase(MiniSoC):
         self.add_memory_group("drtioaux_mem", drtioaux_memory_group)
         self.add_csr_group("drtiorep", drtiorep_csr_group)
 
+        rtio_clk_period = 1e9/rtio_clk_freq
         self.config["RTIO_FREQUENCY"] = str(rtio_clk_freq/1e6)
         if with_wrpll:
             self.comb += [
@@ -136,12 +137,16 @@ class SatelliteBase(MiniSoC):
                 platform.request("ddmtd_main_dcxo_oe").eq(1),
                 platform.request("ddmtd_helper_dcxo_oe").eq(1)
             ]
+            self.submodules.wrpll_sampler = DDMTDSamplerExtFF(
+                platform.request("ddmtd_inputs"))
             self.submodules.wrpll = WRPLL(
                 helper_clk_pads=platform.request("ddmtd_helper_clk"),
                 main_dcxo_i2c=platform.request("ddmtd_main_dcxo_i2c"),
                 helper_dxco_i2c=platform.request("ddmtd_helper_dcxo_i2c"),
-                ddmtd_inputs=platform.request("ddmtd_inputs"))
+                ddmtd_inputs=self.wrpll_sampler)
             self.csr_devices.append("wrpll")
+            platform.add_period_constraint(self.wrpll.cd_helper.clk, rtio_clk_period*0.99)
+            platform.add_false_path_constraints(self.crg.cd_sys.clk, self.wrpll.cd_helper.clk)
         else:
             self.comb += platform.request("filtered_clk_sel").eq(1)
             self.submodules.siphaser = SiPhaser7Series(
@@ -160,7 +165,6 @@ class SatelliteBase(MiniSoC):
             self.config["I2C_BUS_COUNT"] = 1
             self.config["HAS_SI5324"] = None
 
-        rtio_clk_period = 1e9/rtio_clk_freq
         gth = self.drtio_transceiver.gths[0]
         platform.add_period_constraint(gth.txoutclk, rtio_clk_period/2)
         platform.add_period_constraint(gth.rxoutclk, rtio_clk_period)

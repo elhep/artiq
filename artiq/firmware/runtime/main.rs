@@ -88,25 +88,6 @@ fn setup_log_levels() {
     }
 }
 
-fn sayma_hw_init() {
-    #[cfg(has_hmc830_7043)]
-    /* must be the first SPI init because of HMC830 SPI mode selection */
-    board_artiq::hmc830_7043::init().expect("cannot initialize HMC830/7043");
-    #[cfg(has_ad9154)]
-    {
-        board_artiq::ad9154::jesd_reset(false);
-        board_artiq::ad9154::init();
-        if let Err(e) = board_artiq::jesd204sync::sysref_auto_rtio_align() {
-            error!("failed to align SYSREF at FPGA: {}", e);
-        }
-        if let Err(e) = board_artiq::jesd204sync::sysref_auto_dac_align() {
-            error!("failed to align SYSREF at DAC: {}", e);
-        }
-    }
-    #[cfg(has_allaki_atts)]
-    board_artiq::hmc542::program_all(8/*=4dB*/);
-}
-
 fn startup() {
     irq::set_mask(0);
     irq::set_ie(true);
@@ -118,7 +99,6 @@ fn startup() {
     setup_log_levels();
     #[cfg(has_i2c)]
     board_misoc::i2c::init().expect("I2C initialization failed");
-    sayma_hw_init();
     rtio_clocking::init();
 
     let mut net_device = unsafe { ethmac::EthernetDevice::new() };
@@ -309,7 +289,7 @@ pub fn panic_impl(info: &core::panic::PanicInfo) -> ! {
         print!("panic at unknown location");
     }
     if let Some(message) = info.message() {
-        println!("{}", message);
+        println!(": {}", message);
     } else {
         println!("");
     }

@@ -5,7 +5,7 @@ from migen.genlib.io import DifferentialOutput
 from artiq.gateware import rtio
 from artiq.gateware.rtio.phy import spi2, ad53xx_monitor, grabber
 from artiq.gateware.suservo import servo, pads as servo_pads
-from artiq.gateware.rtio.phy import servo as rtservo
+from artiq.gateware.rtio.phy import servo as rtservo, fastino
 
 
 def _eem_signal(i):
@@ -470,13 +470,15 @@ class Grabber(_EEM):
 class SUServo(_EEM):
     @staticmethod
     def io(*eems, iostandard="LVDS_25"):
-        assert len(eems) == 6
-        return (Sampler.io(*eems[0:2], iostandard=iostandard)
-                + Urukul.io_qspi(*eems[2:4], iostandard=iostandard)
-                + Urukul.io_qspi(*eems[4:6], iostandard=iostandard))
+        assert len(eems) in (4, 6)
+        io = (Sampler.io(*eems[0:2], iostandard=iostandard)
+                + Urukul.io_qspi(*eems[2:4], iostandard=iostandard))
+        if len(eems) == 6:  # two Urukuls
+            io += Urukul.io_qspi(*eems[4:6], iostandard=iostandard)
+        return io
 
     @classmethod
-    def add_std(cls, target, eems_sampler, eems_urukul0, eems_urukul1,
+    def add_std(cls, target, eems_sampler, eems_urukul,
                 t_rtt=4, clk=1, shift=11, profile=5,
                 iostandard="LVDS_25"):
         """Add a 8-channel Sampler-Urukul Servo
@@ -496,15 +498,14 @@ class SUServo(_EEM):
             (default: 5)
         """
         cls.add_extension(
-            target, *(eems_sampler + eems_urukul0 + eems_urukul1),
+            target, *(eems_sampler + sum(eems_urukul, [])),
             iostandard=iostandard)
         eem_sampler = "sampler{}".format(eems_sampler[0])
-        eem_urukul0 = "urukul{}".format(eems_urukul0[0])
-        eem_urukul1 = "urukul{}".format(eems_urukul1[0])
+        eem_urukul = ["urukul{}".format(i[0]) for i in eems_urukul]
 
         sampler_pads = servo_pads.SamplerPads(target.platform, eem_sampler)
         urukul_pads = servo_pads.UrukulPads(
-            target.platform, eem_urukul0, eem_urukul1)
+            target.platform, *eem_urukul)
         target.submodules += sampler_pads, urukul_pads
         # timings in units of RTIO coarse period
         adc_p = servo.ADCParams(width=16, channels=8, lanes=4, t_cnvh=4,
@@ -536,30 +537,91 @@ class SUServo(_EEM):
         target.submodules += phy
         target.rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=4))
 
+        for i in range(2):
+            if len(eem_urukul) > i:
+                spi_p, spi_n = (
+                    target.platform.request("{}_spi_p".format(eem_urukul[i])),
+                    target.platform.request("{}_spi_n".format(eem_urukul[i])))
+            else:  # create a dummy bus
+                spi_p = Record([("clk", 1), ("cs_n", 1)])  # mosi, cs_n
+                spi_n = None
+
+            phy = spi2.SPIMaster(spi_p, spi_n)
+            target.submodules += phy
+            target.rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=4))
+
+        for j, eem_urukuli in enumerate(eem_urukul):
+            pads = target.platform.request("{}_dds_reset_sync_in".format(eem_urukuli))
+            target.specials += DifferentialOutput(0, pads.p, pads.n)
+
+            for i, signal in enumerate("sw0 sw1 sw2 sw3".split()):
+                pads = target.platform.request("{}_{}".format(eem_urukuli, signal))
+                target.specials += DifferentialOutput(
+                    su.iir.ctrl[j*4 + i].en_out, pads.p, pads.n)
+
+
+class Mirny(_EEM):
+    @staticmethod
+    def io(eem, iostandard="LVDS_25"):
+        ios = [
+            ("mirny{}_spi_p".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "p"))),
+                Subsignal("mosi", Pins(_eem_pin(eem, 1, "p"))),
+                Subsignal("miso", Pins(_eem_pin(eem, 2, "p"))),
+                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "p"))),
+                IOStandard(iostandard),
+            ),
+            ("mirny{}_spi_n".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "n"))),
+                Subsignal("mosi", Pins(_eem_pin(eem, 1, "n"))),
+                Subsignal("miso", Pins(_eem_pin(eem, 2, "n"))),
+                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "n"))),
+                IOStandard(iostandard),
+            ),
+        ]
+        for i in range(4):
+            ios.append(
+                ("mirny{}_io{}".format(eem, i), 0,
+                    Subsignal("p", Pins(_eem_pin(eem, 4 + i, "p"))),
+                    Subsignal("n", Pins(_eem_pin(eem, 4 + i, "n"))),
+                    IOStandard(iostandard)
+                ))
+        return ios
+
+    @classmethod
+    def add_std(cls, target, eem, ttl_out_cls, iostandard="LVDS_25"):
+        cls.add_extension(target, eem, iostandard=iostandard)
+
         phy = spi2.SPIMaster(
-            target.platform.request("{}_spi_p".format(eem_urukul0)),
-            target.platform.request("{}_spi_n".format(eem_urukul0)))
+            target.platform.request("mirny{}_spi_p".format(eem)),
+            target.platform.request("mirny{}_spi_n".format(eem)))
         target.submodules += phy
         target.rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=4))
 
-        pads = target.platform.request("{}_dds_reset_sync_in".format(eem_urukul0))
-        target.specials += DifferentialOutput(0, pads.p, pads.n)
+        for i in range(4):
+            pads = target.platform.request("mirny{}_io{}".format(eem, i))
+            phy = ttl_out_cls(pads.p, pads.n)
+            target.submodules += phy
+            target.rtio_channels.append(rtio.Channel.from_phy(phy))
 
-        for i, signal in enumerate("sw0 sw1 sw2 sw3".split()):
-            pads = target.platform.request("{}_{}".format(eem_urukul0, signal))
-            target.specials += DifferentialOutput(
-                su.iir.ctrl[i].en_out, pads.p, pads.n)
 
-        phy = spi2.SPIMaster(
-            target.platform.request("{}_spi_p".format(eem_urukul1)),
-            target.platform.request("{}_spi_n".format(eem_urukul1)))
+class Fastino(_EEM):
+    @staticmethod
+    def io(eem, iostandard="LVDS_25"):
+        return [
+            ("fastino{}_ser_{}".format(eem, pol), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, pol))),
+                Subsignal("mosi", Pins(*(_eem_pin(eem, i, pol)
+                    for i in range(1, 7)))),
+                Subsignal("miso", Pins(_eem_pin(eem, 7, pol))),
+                IOStandard(iostandard),
+            ) for pol in "pn"]
+
+    @classmethod
+    def add_std(cls, target, eem, iostandard="LVDS_25"):
+        cls.add_extension(target, eem, iostandard=iostandard)
+
+        phy = fastino.Fastino(target.platform.request("fastino{}_ser_p".format(eem)),
+            target.platform.request("fastino{}_ser_n".format(eem)))
         target.submodules += phy
         target.rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=4))
-
-        pads = target.platform.request("{}_dds_reset_sync_in".format(eem_urukul1))
-        target.specials += DifferentialOutput(0, pads.p, pads.n)
-
-        for i, signal in enumerate("sw0 sw1 sw2 sw3".split()):
-            pads = target.platform.request("{}_{}".format(eem_urukul1, signal))
-            target.specials += DifferentialOutput(
-                su.iir.ctrl[i + 4].en_out, pads.p, pads.n)

@@ -25,11 +25,13 @@ def get_argparser():
         epilog="""\
 Valid actions:
 
-    * gateware: write gateware bitstream to flash
+    * gateware: write main gateware bitstream to flash
+    * rtm_gateware: write RTM gateware bitstream to flash
     * bootloader: write bootloader to flash
     * storage: write storage image to flash
     * firmware: write firmware to flash
-    * load: load gateware bitstream into device (volatile but fast)
+    * load: load main gateware bitstream into device (volatile but fast)
+    * rtm_load: load RTM gateware bitstream into device
     * erase: erase flash memory
     * start: trigger the target to (re)load its gateware bitstream from flash
 
@@ -70,8 +72,10 @@ Prerequisites:
     parser.add_argument("-d", "--dir", help="look for board binaries in this directory")
     parser.add_argument("--srcbuild", help="board binaries directory is laid out as a source build tree",
                         default=False, action="store_true")
+    parser.add_argument("--force-rtm", help="force RTM actions on boards/variants that normally do not have a RTM",
+                        default=False, action="store_true")
     parser.add_argument("action", metavar="ACTION", nargs="*",
-                        default="gateware bootloader firmware start".split(),
+                        default="gateware rtm_gateware bootloader firmware start".split(),
                         help="actions to perform, default: %(default)s")
     return parser
 
@@ -364,7 +368,7 @@ class ProgrammerMetlino(Programmer):
         add_commands(self._script, "echo \"AMC FPGA XADC:\"", "xadc_report xcu.tap")
 
     def load_proxy(self):
-        self.load(find_proxy_bitfile("bscan_spi_xcku040-sayma.bit"), pld=0)
+        self.load(find_proxy_bitfile("bscan_spi_xcku040.bit"), pld=0)
 
     def start(self):
         add_commands(self._script, "xcu_program xcu.tap")
@@ -417,8 +421,9 @@ def main():
     if bin_dir is None:
         bin_dir = os.path.join(artiq_dir, "board-support")
 
-    needs_artifacts = any(action in args.action
-                          for action in ["gateware", "bootloader", "firmware", "load"])
+    needs_artifacts = any(
+        action in args.action
+        for action in ["gateware", "rtm_gateware", "bootloader", "firmware", "load", "rtm_load"])
     variant = args.variant
     if needs_artifacts and variant is None:
         variants = []
@@ -492,7 +497,9 @@ def main():
             gateware_bin = convert_gateware(
                 artifact_path(variant_dir, "gateware", "top.bit"))
             programmer.write_binary(*config["gateware"], gateware_bin)
-            if args.target == "sayma" and variant != "simplesatellite" and variant != "master":
+        elif action == "rtm_gateware":
+            if args.force_rtm or (
+                    args.target == "sayma" and variant != "simplesatellite" and variant != "master"):
                 rtm_gateware_bin = convert_gateware(
                     artifact_path(rtm_variant_dir, "gateware", "top.bit"), header=True)
                 programmer.write_binary(*config["rtm_gateware"],
@@ -513,14 +520,16 @@ def main():
             programmer.write_binary(*config["firmware"], firmware_fbi)
         elif action == "load":
             if args.target == "sayma":
-                if variant != "simplesatellite" and variant != "master":
-                    rtm_gateware_bit = artifact_path(rtm_variant_dir, "gateware", "top.bit")
-                    programmer.load(rtm_gateware_bit, 0)
                 gateware_bit = artifact_path(variant_dir, "gateware", "top.bit")
                 programmer.load(gateware_bit, 1)
             else:
                 gateware_bit = artifact_path(variant_dir, "gateware", "top.bit")
                 programmer.load(gateware_bit, 0)
+        elif action == "rtm_load":
+            if args.force_rtm or (
+                    args.target == "sayma" and variant != "simplesatellite" and variant != "master"):
+                rtm_gateware_bit = artifact_path(rtm_variant_dir, "gateware", "top.bit")
+                programmer.load(rtm_gateware_bit, 0)
         elif action == "start":
             programmer.start()
         elif action == "erase":

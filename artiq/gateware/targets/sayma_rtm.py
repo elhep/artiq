@@ -16,9 +16,10 @@ from misoc.targets.sayma_rtm import BaseSoC, soc_sayma_rtm_args, soc_sayma_rtm_a
 from misoc.integration.builder import Builder, builder_args, builder_argdict
 
 from artiq.gateware import rtio
-from artiq.gateware.rtio.phy import ttl_serdes_7series
+from artiq.gateware.rtio.phy import ttl_simple, ttl_serdes_7series
 from artiq.gateware.drtio.transceiver import gtp_7series
 from artiq.gateware.drtio.siphaser import SiPhaser7Series
+from artiq.gateware.drtio.wrpll import WRPLL, DDMTDSamplerGTP
 from artiq.gateware.drtio.rx_synchronizer import XilinxRXSynchronizer
 from artiq.gateware.drtio import *
 from artiq.build_soc import add_identifier
@@ -73,7 +74,7 @@ class _SatelliteBase(BaseSoC):
     }
     mem_map.update(BaseSoC.mem_map)
 
-    def __init__(self, rtio_clk_freq=150e6, **kwargs):
+    def __init__(self, rtio_clk_freq, *, with_wrpll, **kwargs):
         BaseSoC.__init__(self,
                  cpu_type="or1k",
                  **kwargs)
@@ -82,20 +83,20 @@ class _SatelliteBase(BaseSoC):
 
         platform = self.platform
 
-        disable_si5324_ibuf = Signal(reset=1)
-        disable_si5324_ibuf.attr.add("no_retiming")
-        si5324_clkout = platform.request("cdr_clk_clean")
-        si5324_clkout_buf = Signal()
+        disable_cdrclkc_ibuf = Signal(reset=1)
+        disable_cdrclkc_ibuf.attr.add("no_retiming")
+        cdrclkc_clkout = platform.request("cdr_clk_clean")
+        cdrclkc_clkout_buf = Signal()
         self.specials += Instance("IBUFDS_GTE2",
-            i_CEB=disable_si5324_ibuf,
-            i_I=si5324_clkout.p, i_IB=si5324_clkout.n,
-            o_O=si5324_clkout_buf)
+            i_CEB=disable_cdrclkc_ibuf,
+            i_I=cdrclkc_clkout.p, i_IB=cdrclkc_clkout.n,
+            o_O=cdrclkc_clkout_buf)
         qpll_drtio_settings = QPLLSettings(
             refclksel=0b001,
             fbdiv=4,
             fbdiv_45=5,
             refclk_div=1)
-        qpll = QPLL(si5324_clkout_buf, qpll_drtio_settings)
+        qpll = QPLL(cdrclkc_clkout_buf, qpll_drtio_settings)
         self.submodules += qpll
 
         self.submodules.drtio_transceiver = gtp_7series.GTP(
@@ -104,7 +105,7 @@ class _SatelliteBase(BaseSoC):
             sys_clk_freq=self.clk_freq,
             rtio_clk_freq=rtio_clk_freq)
         self.csr_devices.append("drtio_transceiver")
-        self.sync += disable_si5324_ibuf.eq(
+        self.sync += disable_cdrclkc_ibuf.eq(
             ~self.drtio_transceiver.stable_clkin.storage)
 
         self.submodules.rtio_tsc = rtio.TSC("sync", glbl_fine_ts_width=3)
@@ -131,25 +132,44 @@ class _SatelliteBase(BaseSoC):
         self.add_csr_group("drtioaux", ["drtioaux0"])
         self.add_memory_group("drtioaux_mem", ["drtioaux0_mem"])
 
-        self.config["RTIO_FREQUENCY"] = str(rtio_clk_freq/1e6)
-        self.comb += platform.request("filtered_clk_sel").eq(1)
-        self.submodules.siphaser = SiPhaser7Series(
-            si5324_clkin=platform.request("si5324_clkin"),
-            rx_synchronizer=self.rx_synchronizer,
-            ref_clk=self.crg.cd_sys.clk, ref_div2=True,
-            rtio_clk_freq=rtio_clk_freq)
-        platform.add_false_path_constraints(
-            self.crg.cd_sys.clk, self.siphaser.mmcm_freerun_output)
-        self.csr_devices.append("siphaser")
-        i2c = self.platform.request("i2c")
-        self.submodules.i2c = gpio.GPIOTristate([i2c.scl, i2c.sda])
-        self.csr_devices.append("i2c")
-        self.config["I2C_BUS_COUNT"] = 1
-        self.config["HAS_SI5324"] = None
-        self.config["SI5324_SOFT_RESET"] = None
-
-        rtio_clk_period = 1e9/rtio_clk_freq
         gtp = self.drtio_transceiver.gtps[0]
+        rtio_clk_period = 1e9/rtio_clk_freq
+        self.config["RTIO_FREQUENCY"] = str(rtio_clk_freq/1e6)
+        if with_wrpll:
+            self.comb += [
+                platform.request("filtered_clk_sel").eq(0),
+                platform.request("ddmtd_main_dcxo_oe").eq(1),
+                platform.request("ddmtd_helper_dcxo_oe").eq(1)
+            ]
+            self.submodules.wrpll_sampler = DDMTDSamplerGTP(
+                self.drtio_transceiver,
+                platform.request("cdr_clk_clean_fabric"))
+            self.submodules.wrpll = WRPLL(
+                helper_clk_pads=platform.request("ddmtd_helper_clk"),
+                main_dcxo_i2c=platform.request("ddmtd_main_dcxo_i2c"),
+                helper_dxco_i2c=platform.request("ddmtd_helper_dcxo_i2c"),
+                ddmtd_inputs=self.wrpll_sampler)
+            self.csr_devices.append("wrpll")
+            platform.add_period_constraint(self.wrpll.cd_helper.clk, rtio_clk_period*0.99)
+            platform.add_false_path_constraints(self.crg.cd_sys.clk, self.wrpll.cd_helper.clk)
+            platform.add_false_path_constraints(self.wrpll.cd_helper.clk, gtp.rxoutclk)
+        else:
+            self.comb += platform.request("filtered_clk_sel").eq(1)
+            self.submodules.siphaser = SiPhaser7Series(
+                si5324_clkin=platform.request("si5324_clkin"),
+                rx_synchronizer=self.rx_synchronizer,
+                ref_clk=self.crg.cd_sys.clk, ref_div2=True,
+                rtio_clk_freq=rtio_clk_freq)
+            platform.add_false_path_constraints(
+                self.crg.cd_sys.clk, self.siphaser.mmcm_freerun_output)
+            self.csr_devices.append("siphaser")
+            i2c = self.platform.request("i2c")
+            self.submodules.i2c = gpio.GPIOTristate([i2c.scl, i2c.sda])
+            self.csr_devices.append("i2c")
+            self.config["I2C_BUS_COUNT"] = 1
+            self.config["HAS_SI5324"] = None
+            self.config["SI5324_SOFT_RESET"] = None
+
         platform.add_period_constraint(gtp.txoutclk, rtio_clk_period)
         platform.add_period_constraint(gtp.rxoutclk, rtio_clk_period)
         platform.add_false_path_constraints(
@@ -176,14 +196,36 @@ class Satellite(_SatelliteBase):
         platform = self.platform
 
         rtio_channels = []
-        phy = ttl_serdes_7series.Output_8X(platform.request("allaki0_rfsw0"))
-        self.submodules += phy
-        rtio_channels.append(rtio.Channel.from_phy(phy))
-        phy = ttl_serdes_7series.Output_8X(platform.request("allaki0_rfsw1"))
-        self.submodules += phy
-        rtio_channels.append(rtio.Channel.from_phy(phy))
+        for bm in range(2):
+            print("BaseMod{} RF switches starting at RTIO channel 0x{:06x}"
+                .format(bm, len(rtio_channels)))
+            for i in range(4):
+                phy = ttl_serdes_7series.Output_8X(platform.request("basemod{}_rfsw".format(bm), i),
+                    invert=True)
+                self.submodules += phy
+                rtio_channels.append(rtio.Channel.from_phy(phy))
+
+            print("BaseMod{} attenuator starting at RTIO channel 0x{:06x}"
+                .format(bm, len(rtio_channels)))
+            basemod_att = platform.request("basemod{}_att".format(bm))
+            for name in "rst_n clk le".split():
+                signal = getattr(basemod_att, name)
+                for i in range(len(signal)):
+                    phy = ttl_simple.Output(signal[i])
+                    self.submodules += phy
+                    rtio_channels.append(rtio.Channel.from_phy(phy))
+            phy = ttl_simple.Output(basemod_att.mosi[0])
+            self.submodules += phy
+            rtio_channels.append(rtio.Channel.from_phy(phy))
+            for i in range(3):
+                self.comb += basemod_att.mosi[i+1].eq(basemod_att.miso[i])
+            phy = ttl_simple.InOut(basemod_att.miso[3])
+            self.submodules += phy
+            rtio_channels.append(rtio.Channel.from_phy(phy))
 
         self.add_rtio(rtio_channels)
+
+        self.comb += platform.request("clk_src_ext_sel").eq(0)
 
         # HMC clock chip and DAC control
         self.comb += [
@@ -207,7 +249,7 @@ class Satellite(_SatelliteBase):
         self.config["CONVERTER_SPI_HMC830_CS"] = 0
         self.config["CONVERTER_SPI_HMC7043_CS"] = 1
         self.config["CONVERTER_SPI_FIRST_AD9154_CS"] = 2
-        self.config["HMC830_REF"] = "150"
+        self.config["HMC830_REF"] = str(int(self.rtio_clk_freq/1e6))
 
         # HMC workarounds
         self.comb += platform.request("hmc830_pwr_en").eq(1)
@@ -243,10 +285,15 @@ def main():
         description="Sayma RTM gateware and firmware builder")
     builder_args(parser)
     soc_sayma_rtm_args(parser)
+    parser.add_argument("--rtio-clk-freq",
+        default=150, type=int, help="RTIO clock frequency in MHz")
+    parser.add_argument("--with-wrpll", default=False, action="store_true")
     parser.set_defaults(output_dir=os.path.join("artiq_sayma", "rtm"))
     args = parser.parse_args()
 
-    soc = Satellite(**soc_sayma_rtm_argdict(args))
+    soc = Satellite(
+        rtio_clk_freq=1e6*args.rtio_clk_freq, with_wrpll=args.with_wrpll,
+        **soc_sayma_rtm_argdict(args))
     builder = SatmanSoCBuilder(soc, **builder_argdict(args))
     try:
         builder.build()

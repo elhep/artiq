@@ -73,7 +73,7 @@ class TVar(Type):
             # path compression
             iter = self
             while iter.__class__ == TVar:
-                if iter is iter.parent:
+                if iter is root:
                     break
                 else:
                     iter, iter.parent = iter.parent, root
@@ -81,6 +81,8 @@ class TVar(Type):
             return root
 
     def unify(self, other):
+        if other is self:
+            return
         other = other.find()
 
         if self.parent is self:
@@ -124,6 +126,8 @@ class TMono(Type):
         return self
 
     def unify(self, other):
+        if other is self:
+            return
         if isinstance(other, TMono) and self.name == other.name:
             assert self.params.keys() == other.params.keys()
             for param in self.params:
@@ -171,6 +175,8 @@ class TTuple(Type):
         return self
 
     def unify(self, other):
+        if other is self:
+            return
         if isinstance(other, TTuple) and len(self.elts) == len(other.elts):
             for selfelt, otherelt in zip(self.elts, other.elts):
                 selfelt.unify(otherelt)
@@ -237,6 +243,8 @@ class TFunction(Type):
         return self
 
     def unify(self, other):
+        if other is self:
+            return
         if isinstance(other, TFunction) and \
                 self.args.keys() == other.args.keys() and \
                 self.optargs.keys() == other.optargs.keys():
@@ -296,6 +304,8 @@ class TCFunction(TFunction):
         self.flags = flags
 
     def unify(self, other):
+        if other is self:
+            return
         if isinstance(other, TCFunction) and \
                 self.name == other.name:
             super().unify(other)
@@ -324,6 +334,8 @@ class TRPC(Type):
         return self
 
     def unify(self, other):
+        if other is self:
+            return
         if isinstance(other, TRPC) and \
                 self.service == other.service and \
                 self.is_async == other.is_async:
@@ -366,6 +378,8 @@ class TBuiltin(Type):
         return self
 
     def unify(self, other):
+        if other is self:
+            return
         if self != other:
             raise UnificationError(self, other)
 
@@ -471,6 +485,8 @@ class TValue(Type):
         return self
 
     def unify(self, other):
+        if other is self:
+            return
         if isinstance(other, TVar):
             other.unify(self)
         elif self != other:
@@ -561,13 +577,15 @@ def is_mono(typ, name=None, **params):
     if not isinstance(typ, TMono):
         return False
 
-    params_match = True
+    if name is not None and typ.name != name:
+        return False
+
     for param in params:
         if param not in typ.params:
             return False
-        params_match = params_match and \
-            typ.params[param].find() == params[param].find()
-    return name is None or (typ.name == name and params_match)
+        if typ.params[param].find() != params[param].find():
+            return False
+    return True
 
 def is_polymorphic(typ):
     return typ.fold(False, lambda accum, typ: accum or is_var(typ))

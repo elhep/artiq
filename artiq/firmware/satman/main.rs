@@ -463,6 +463,8 @@ pub extern fn main() -> i32 {
         csr::drtio_transceiver::stable_clkin_write(1);
     }
     clock::spin_us(1500); // wait for CPLL/QPLL lock
+    #[cfg(has_wrpll)]
+    wrpll::diagnostics();
     init_rtio_crg();
 
     #[cfg(has_hmc830_7043)]
@@ -474,8 +476,6 @@ pub extern fn main() -> i32 {
             board_artiq::ad9154::reset_and_detect(dacno as u8).expect("AD9154 DAC not detected");
         }
     }
-    #[cfg(has_allaki_atts)]
-    board_artiq::hmc542::program_all(8/*=4dB*/);
 
     #[cfg(has_drtio_routing)]
     let mut repeaters = [repeater::Repeater::default(); csr::DRTIOREP.len()];

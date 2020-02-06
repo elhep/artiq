@@ -11,7 +11,12 @@ pub mod jesd {
         unsafe {
             (csr::JDCG[dacno as usize].jesd_control_enable_write)(if en {1} else {0})
         }
-        clock::spin_us(5000);
+    }
+
+    pub fn phy_done(dacno: u8) -> bool {
+       unsafe {
+           (csr::JDCG[dacno as usize].jesd_control_phy_done_read)() != 0
+       }
     }
 
     pub fn ready(dacno: u8) -> bool {
@@ -84,13 +89,20 @@ pub mod jdac {
             info!("DAC-{} initializing...", dacno);
 
             jesd::enable(dacno, true);
-            clock::spin_us(10);
-            if !jesd::ready(dacno) {
-                error!("JESD core reported not ready");
-                return Err("JESD core reported not ready");
+            clock::spin_us(10_000);
+            if !jesd::phy_done(dacno) {
+                error!("JESD core PHY not done");
+                return Err("JESD core PHY not done");
             }
 
             basic_request(dacno, jdac_requests::INIT, 0)?;
+
+            // JESD ready depends on JSYNC being valid, so DAC init needs to happen first
+            if !jesd::ready(dacno) {
+                error!("JESD core reported not ready, sending DAC status print request");
+                basic_request(dacno, jdac_requests::PRINT_STATUS, 0)?;
+                return Err("JESD core reported not ready");
+            }
 
             jesd::prbs(dacno, true);
             basic_request(dacno, jdac_requests::PRBS, 0)?;
@@ -102,8 +114,6 @@ pub mod jdac {
 
             basic_request(dacno, jdac_requests::INIT, 0)?;
             clock::spin_us(5000);
-
-            basic_request(dacno, jdac_requests::PRINT_STATUS, 0)?;
 
             if !jesd::jsync(dacno) {
                 error!("JESD core reported bad SYNC");
