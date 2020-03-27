@@ -605,6 +605,38 @@ class Mirny(_EEM):
             target.rtio_channels.append(rtio.Channel.from_phy(phy))
 
 
+class Phaser(_EEM):
+    @staticmethod
+    def io(eem, eem_aux, iostandard="LVDS_25"):
+        ios = [
+            ("phaser{}_spi_p".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "p"))),
+                Subsignal("mosi", Pins(_eem_pin(eem, 1, "p"))),
+                Subsignal("miso", Pins(_eem_pin(eem, 2, "p"))),
+                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "p"))),
+                IOStandard(iostandard),
+            ),
+            ("phaser{}_spi_n".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "n"))),
+                Subsignal("mosi", Pins(_eem_pin(eem, 1, "n"))),
+                Subsignal("miso", Pins(_eem_pin(eem, 2, "n"))),
+                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "n"))),
+                IOStandard(iostandard),
+            ),
+        ]
+        return ios
+
+    @classmethod
+    def add_std(cls, target, eem, eem_aux, ttl_out_cls, iostandard="LVDS_25"):
+        cls.add_extension(target, eem, eem_aux, iostandard=iostandard)
+
+        phy = spi2.SPIMaster(
+            target.platform.request("phaser{}_spi_p".format(eem)),
+            target.platform.request("phaser{}_spi_n".format(eem)))
+        target.submodules += phy
+        target.rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=4))
+
+
 class Fastino(_EEM):
     @staticmethod
     def io(eem, iostandard="LVDS_25"):

@@ -106,6 +106,17 @@ def peripheral_mirny(module, peripheral):
         ttl_serdes_7series.Output_8X)
 
 
+def peripheral_phaser(module, peripheral):
+    if len(peripheral["ports"]) == 1:
+        port, port_aux = peripheral["ports"][0], None
+    elif len(peripheral["ports"]) == 2:
+        port, port_aux = peripheral["ports"]
+    else:
+        raise ValueError("wrong number of ports")
+    eem.Phaser.add_std(module, port, port_aux,
+        ttl_serdes_7series.Output_8X)
+
+
 def peripheral_fastino(module, peripheral):
     if len(peripheral["ports"]) != 1:
         raise ValueError("wrong number of ports")
@@ -121,6 +132,7 @@ peripheral_processors = {
     "zotino": peripheral_zotino,
     "grabber": peripheral_grabber,
     "mirny": peripheral_mirny,
+    "phaser": peripheral_phaser,
     "fastino": peripheral_fastino,
 }
 
