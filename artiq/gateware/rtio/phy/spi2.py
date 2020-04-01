@@ -117,26 +117,24 @@ class SPIMaster(Module):
 
 class SPIMasterPhaser(Module):
     
-    def __init__(self, pads, pads_n=None):
+    def __init__(self, pads, pads_n=None, rtlink_no=1):
         to_rio_phy = ClockDomainsRenamer("rio_phy")
         if pads_n is None:
             interface = SPIInterface(pads)
         else:
-            interface = SPIInterPhaser(pads, pads_n)
+            interface = SPIInterPhaser(pads, pads_n, rtlink_no=rtlink_no)
         interface = to_rio_phy(interface)
-        spi = to_rio_phy(SPIMachine(data_width=32, div_width=8))
+        spi = to_rio_phy(SPIMachine(data_width=32, div_width=8, rtlink_no=rtlink_no))
         self.submodules += interface, spi
 
-        self.rtlink = rtlink.Interface(
-                rtlink.OInterface(len(spi.reg.pdo), address_width=1,
-                    enable_replace=False),
-                rtlink.IInterface(len(spi.reg.pdi), timestamped=False)
-        )
-        self.rtlink1 = rtlink.Interface(
-                rtlink.OInterface(len(spi.reg.pdo), address_width=1,
-                    enable_replace=False), # chyba jednak nie można robić bez outputu, bo nie tworzył stb
-                rtlink.IInterface(len(spi.reg.pdi1), timestamped=False)
-        )
+        self.rtlinks = []
+        for n in range(rtlink_no):
+            self.rtlinks.append(rtlink.Interface(
+                    rtlink.OInterface(len(spi.reg.pdo), address_width=1,
+                        enable_replace=False),
+                    rtlink.IInterface(len(getattr(spi.reg, "pdi_{}".format(n))), timestamped=False)
+                )
+            )
 
         ###
 
@@ -154,19 +152,20 @@ class SPIMasterPhaser(Module):
             ("div", 8),
             ("cs", 8),
         ])
-        assert len(config) == len(spi.reg.pdo) == len(spi.reg.pdi) == 32
+        for n in range(rtlink_no):
+            assert len(config) == len(spi.reg.pdo) == len(getattr(spi.reg, "pdi_{}".format(n))) == 32
 
         config.offline.reset = 1
         config.end.reset = 1
         read = Signal()
 
         self.sync.rio_phy += [
-            If(self.rtlink.i.stb,
+            If(self.rtlinks[0].i.stb,
                 read.eq(0)
             ),
-            If(self.rtlink.o.stb & spi.writable,
-                If(self.rtlink.o.address,
-                    config.raw_bits().eq(self.rtlink.o.data)
+            If(self.rtlinks[0].o.stb & spi.writable,
+                If(self.rtlinks[0].o.address,
+                    config.raw_bits().eq(self.rtlinks[0].o.data)
                 ).Else(
                     read.eq(config.input)
                 )
@@ -190,18 +189,20 @@ class SPIMasterPhaser(Module):
                 interface.clk_next.eq(spi.clk_next),
                 interface.ce.eq(spi.ce),
                 interface.sample.eq(spi.reg.sample),
-                spi.reg.sdi.eq(interface.sdi),
-                spi.reg.sdi1.eq(interface.sdi1),
+                [getattr(spi.reg, "sdi_{}".format(n)).eq(getattr(interface, "sdi_{}".format(n)))
+                        for n in range(rtlink_no)],
                 interface.sdo.eq(spi.reg.sdo),
 
-                spi.load.eq(self.rtlink.o.stb & spi.writable &
-                    ~self.rtlink.o.address),
-                spi.reg.pdo.eq(self.rtlink.o.data),
-                self.rtlink.o.busy.eq(~spi.writable),
-                self.rtlink.i.stb.eq(spi.readable & read),
-                self.rtlink.i.data.eq(spi.reg.pdi),
+                spi.load.eq(self.rtlinks[0].o.stb & spi.writable &
+                    ~self.rtlinks[0].o.address),
+                spi.reg.pdo.eq(self.rtlinks[0].o.data),
+                self.rtlinks[0].o.busy.eq(~spi.writable),
+                
+                [(link.i.stb.eq(spi.readable & read),
+                link.i.data.eq(getattr(spi.reg, "pdi_{}".format(idx))))
+                for idx, link in enumerate (self.rtlinks)]
 
-                self.rtlink1.i.stb.eq(spi.readable & read),
-                self.rtlink1.i.data.eq(spi.reg.pdi1)
-        ]
+
+            ]
+
         self.probes = []
