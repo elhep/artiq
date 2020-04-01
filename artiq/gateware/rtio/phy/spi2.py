@@ -1,6 +1,6 @@
 from migen import *
 
-from misoc.cores.spi2 import SPIMachine, SPIInterfaceXC7Diff, SPIInterface
+from misoc.cores.spi2 import SPIMachine, SPIInterfaceXC7Diff, SPIInterface, SPIInterPhaser
 from artiq.gateware.rtio import rtlink
 
 
@@ -112,5 +112,96 @@ class SPIMaster(Module):
                 self.rtlink.o.busy.eq(~spi.writable),
                 self.rtlink.i.stb.eq(spi.readable & read),
                 self.rtlink.i.data.eq(spi.reg.pdi)
+        ]
+        self.probes = []
+
+class SPIMasterPhaser(Module):
+    
+    def __init__(self, pads, pads_n=None):
+        to_rio_phy = ClockDomainsRenamer("rio_phy")
+        if pads_n is None:
+            interface = SPIInterface(pads)
+        else:
+            interface = SPIInterPhaser(pads, pads_n)
+        interface = to_rio_phy(interface)
+        spi = to_rio_phy(SPIMachine(data_width=32, div_width=8))
+        self.submodules += interface, spi
+
+        self.rtlink = rtlink.Interface(
+                rtlink.OInterface(len(spi.reg.pdo), address_width=1,
+                    enable_replace=False),
+                rtlink.IInterface(len(spi.reg.pdi), timestamped=False)
+        )
+        self.rtlink1 = rtlink.Interface(
+                rtlink.OInterface(len(spi.reg.pdo), address_width=1,
+                    enable_replace=False), # chyba jednak nie można robić bez outputu, bo nie tworzył stb
+                rtlink.IInterface(len(spi.reg.pdi1), timestamped=False)
+        )
+
+        ###
+
+        config = Record([
+            ("offline", 1),
+            ("end", 1),
+            ("input", 1),
+            ("cs_polarity", 1),
+            ("clk_polarity", 1),
+            ("clk_phase", 1),
+            ("lsb_first", 1),
+            ("half_duplex", 1),
+            ("length", 5),
+            ("padding", 3),
+            ("div", 8),
+            ("cs", 8),
+        ])
+        assert len(config) == len(spi.reg.pdo) == len(spi.reg.pdi) == 32
+
+        config.offline.reset = 1
+        config.end.reset = 1
+        read = Signal()
+
+        self.sync.rio_phy += [
+            If(self.rtlink.i.stb,
+                read.eq(0)
+            ),
+            If(self.rtlink.o.stb & spi.writable,
+                If(self.rtlink.o.address,
+                    config.raw_bits().eq(self.rtlink.o.data)
+                ).Else(
+                    read.eq(config.input)
+                )
+            ),
+        ]
+
+        self.comb += [
+                spi.length.eq(config.length),
+                spi.end.eq(config.end),
+                spi.cg.div.eq(config.div),
+                spi.clk_phase.eq(config.clk_phase),
+                spi.reg.lsb_first.eq(config.lsb_first),
+
+                interface.half_duplex.eq(config.half_duplex),
+                interface.cs.eq(config.cs),
+                interface.cs_polarity.eq(Replicate(
+                    config.cs_polarity, len(interface.cs_polarity))),
+                interface.clk_polarity.eq(config.clk_polarity),
+                interface.offline.eq(config.offline),
+                interface.cs_next.eq(spi.cs_next),
+                interface.clk_next.eq(spi.clk_next),
+                interface.ce.eq(spi.ce),
+                interface.sample.eq(spi.reg.sample),
+                spi.reg.sdi.eq(interface.sdi),
+                spi.reg.sdi1.eq(interface.sdi1),
+                interface.sdo.eq(spi.reg.sdo),
+
+                spi.load.eq(self.rtlink.o.stb & spi.writable &
+                    ~self.rtlink.o.address),
+                spi.reg.pdo.eq(self.rtlink.o.data),
+                self.rtlink.o.busy.eq(~spi.writable),
+                self.rtlink.i.stb.eq(spi.readable & read),
+                self.rtlink.i.data.eq(spi.reg.pdi),
+
+                self.rtlink1.i.stb.eq(spi.readable & read),
+                self.rtlink1.i.data.eq(spi.reg.pdi1)
         ]
         self.probes = []

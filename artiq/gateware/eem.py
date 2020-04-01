@@ -272,6 +272,51 @@ class Sampler(_EEM):
         sdr = target.platform.request("sampler{}_sdr".format(eem))
         target.specials += DifferentialOutput(1, sdr.p, sdr.n)
 
+class Phaser(_EEM):
+    @staticmethod
+    def io(eem, iostandard="LVDS_25"):
+        ios = [
+            ("phaser{}_adc_data_p".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "p"))),
+                Subsignal("sdoa", Pins(_eem_pin(eem, 1, "p"))),
+                Subsignal("sdob", Pins(_eem_pin(eem, 6, "p"))),
+                # Misc("DIFF_TERM=TRUE"),
+                IOStandard(iostandard),
+            ),
+            ("phaser{}_adc_data_n".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "n"))),
+                Subsignal("sdoa", Pins(_eem_pin(eem, 1, "n"))),
+                Subsignal("sdob", Pins(_eem_pin(eem, 6, "n"))),
+                # Misc("DIFF_TERM=TRUE"),
+                IOStandard(iostandard),
+            ),
+        ] + [            
+            ("phaser{}_{}".format(eem, sig), 0,
+                Subsignal("p", Pins(_eem_pin(j, i, "p"))),
+                Subsignal("n", Pins(_eem_pin(j, i, "n"))),
+                IOStandard(iostandard)
+            ) for i, j, sig in [
+                (3, eem, "cnvn")
+            ]
+        ]
+        return ios
+
+    @classmethod
+    def add_std(cls, target, eem, ttl_out_cls, iostandard="LVDS_25"):
+        cls.add_extension(target, eem, iostandard=iostandard)
+
+        pads = target.platform.request("phaser{}_cnvn".format(eem))
+        cnvn_phy = ttl_out_cls(pads.p, pads.n)
+        target.submodules += cnvn_phy
+        target.rtio_channels.append(rtio.Channel.from_phy(cnvn_phy))
+
+        phy = spi2.SPIMasterPhaser(
+                target.platform.request("phaser{}_adc_data_p".format(eem)),
+                target.platform.request("phaser{}_adc_data_n".format(eem)))
+        target.submodules += phy
+        target.rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=4))
+        target.rtio_channels.append(rtio.Channel(phy.rtlink1, [], [], ififo_depth=4))
+
 
 class Novogorny(_EEM):
     @staticmethod

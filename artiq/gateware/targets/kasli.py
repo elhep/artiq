@@ -173,6 +173,7 @@ class Tester(StandaloneBase):
                            ttl_simple.ClockGen)
         eem.Sampler.add_std(self, 3, 2, ttl_serdes_7series.Output_8X)
         eem.Zotino.add_std(self, 4, ttl_serdes_7series.Output_8X)
+        eem.Phaser.add_std(self, 6, ttl_serdes_7series.Output_8X)
 
         for i in (1, 2):
             sfp_ctl = self.platform.request("sfp_ctl", i)
