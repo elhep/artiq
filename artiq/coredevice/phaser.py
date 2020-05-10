@@ -213,7 +213,7 @@ class Phaser:
                 raise ValueError("MOD0 readout failure")
             if (self.read_mod(1, 0) & 0x7F) != 0x68:
                 raise ValueError("MOD0 readout failure")
-
+        
         # Disable ATT reset
         self.write_field(REG_ATT_RSTn, 0x3)
 
@@ -251,12 +251,6 @@ class Phaser:
         self.write_field(REG_DAC_TEST_ENA, 0)
         self.write_field(REG_DAC_PLAY, 0)
 
-        # self.write_field(REG_DAC_PLAY, 1)
-        
-        
-        # self.set_att_mu(0, 0x0)
-        # self.set_att_mu(1, 0x0)
-
     @kernel
     def set_att_mu(self, channel, att):
         """Set digital step attenuator in machine units.
@@ -269,7 +263,7 @@ class Phaser:
     @kernel
     def dac_enable_generation(self):
         
-        self.write_field(REG_CLK_SEL, 0) # clock from SMA
+        self.write_field(REG_CLK_SEL, 0) # clock from MMCX
         self.write_field(REG_DAC_TX_ENA, 0)
 
         self.write_dac(0x0, 0x0080) # interpolation 1x, fifo enabled
@@ -291,7 +285,7 @@ class Phaser:
         self.write_dac(0x20, 0x2201) # all via ISTR
         # 0x21 - 0x2F - keep default
 
-        self.write_dac(0x2D, 1 << 13 | 4)
+        # self.write_dac(0x2D, 1 << 13 | 4)
 
         self.write_dac(0x1B, 1 << 11) # fuse_sleep = 1
 
