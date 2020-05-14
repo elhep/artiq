@@ -506,6 +506,7 @@ pub extern fn main() -> i32 {
         } else {
             println!("Flash booting has been disabled.");
         }
+        println!("Net boot 2");        
         #[cfg(has_ethmac)]
         network_boot();
     } else {

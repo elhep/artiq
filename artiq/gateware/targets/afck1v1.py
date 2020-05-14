@@ -144,9 +144,10 @@ class StandaloneBase(MiniSoC, AMPSoC):
                          cpu_type="or1k",
                          sdram_controller_type="minicon",
                          l2_size=128*1024,
+                         integrated_sram_size=8192,
                          ethmac_nrxslots=4,
                          ethmac_ntxslots=4,
-                         cpu_reset_address=0x800000,
+                         cpu_reset_address=0x000000, # 0x800000
                          crg=CRG,
                          **kwargs)
         AMPSoC.__init__(self)
@@ -156,6 +157,7 @@ class StandaloneBase(MiniSoC, AMPSoC):
         self.submodules.i2c = gpio.GPIOTristate([i2c.scl, i2c.sda])
         self.csr_devices.append("i2c")
         self.config["I2C_BUS_COUNT"] = 1
+        self.config["no_flash_boot"] = 1
 
         self.rtio_channels = []
         self.rtio_channel_labels = []
