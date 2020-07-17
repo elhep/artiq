@@ -7,6 +7,7 @@ from migen.genlib.resetsync import AsyncResetSynchronizer
 from migen.genlib.cdc import MultiReg
 from migen.build.generic_platform import *
 from migen.genlib.io import DifferentialOutput
+from migen.build.generic_platform import *
 
 from misoc.interconnect.csr import *
 from misoc.cores import gpio
@@ -22,21 +23,21 @@ from artiq.gateware.rtio.phy.ttl_simple import Output
 
 
 iostd_single = {
-    "fmc1_LA": "LVCMOS25",
-    "fmc1_HA": "LVCMOS25",
-    "fmc1_HB": "LVCMOS25",
-    "fmc2_LA": "LVCMOS25",
-    "fmc2_HA": "LVCMOS25",
-    "fmc2_HB": "LVCMOS18"
+    "fmc1_LA": [IOStandard("LVCMOS25")],
+    "fmc1_HA": [IOStandard("LVCMOS25")],
+    "fmc1_HB": [IOStandard("LVCMOS25")],
+    "fmc2_LA": [IOStandard("LVCMOS25")],
+    "fmc2_HA": [IOStandard("LVCMOS25")],
+    "fmc2_HB": [IOStandard("LVCMOS18")]
 }
 
 iostd_diff = {
-    "fmc1_LA": "LVDS_25",
-    "fmc1_HA": "LVDS_25",
-    "fmc1_HB": "LVDS_25",
-    "fmc2_LA": "LVDS_25",
-    "fmc2_HA": "LVDS_25",
-    "fmc2_HB": "LVDS"
+    "fmc1_LA": [IOStandard("LVDS_25"), Misc("DIFF_TERM=TRUE")],
+    "fmc1_HA": [IOStandard("LVDS_25"), Misc("DIFF_TERM=TRUE")],
+    "fmc1_HB": [IOStandard("LVDS_25"), Misc("DIFF_TERM=TRUE")],
+    "fmc2_LA": [IOStandard("LVDS_25"), Misc("DIFF_TERM=TRUE")],
+    "fmc2_HA": [IOStandard("LVDS_25"), Misc("DIFF_TERM=TRUE")],
+    "fmc2_HB": [IOStandard("LVDS"), Misc("DIFF_TERM=TRUE")],
 }
 
 
