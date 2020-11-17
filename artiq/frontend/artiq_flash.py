@@ -231,7 +231,7 @@ class ProgrammerScanstaXC7(Programmer):
         self._proxy = "bscan_spi_xc7k325t.bit"
 
         add_commands(self._board_script,
-                     "adapter_khz 2000",
+                     "adapter_khz 4000",
                      "source {}".format(self._transfer_script("interface/ftdi/digilent_jtag_hs3.cfg")),
                      "transport select jtag",
                      "source {}".format(self._transfer_script("cpld/xilinx-xc7.cfg")),
