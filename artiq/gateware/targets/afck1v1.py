@@ -185,12 +185,13 @@ class StandaloneBase(MiniSoC, AMPSoC):
         pass
 
     def print_rtio_channels(self):
-        if len(self.rtio_channels) == len(self.rtio_channel_labels):
+        if len(self.rtio_channels) != len(self.rtio_channel_labels):
+            raise RuntimeError("Missing RTIO channel label(s)")
+        with open("rtio_channels.txt", "w+") as f:
             print("RTIO channels:")
             for ch, label in enumerate(self.rtio_channel_labels):
                 print(" - {:3d} : {}".format(ch, label))
-        else:
-            print("Invalid labels length")
+                f.write("{:3d} : {}".format(ch, label))       
 
     def add_rtio(self, rtio_channels):
         fix_serdes_timing_path(self.platform)
