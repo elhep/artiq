@@ -38,7 +38,7 @@ class Master(MiniSoC, AMPSoC):
     }
     mem_map.update(MiniSoC.mem_map)
 
-    def __init__(self, **kwargs):
+    def __init__(self, gateware_identifier_str=None, **kwargs):
         MiniSoC.__init__(self,
                          cpu_type="or1k",
                          sdram_controller_type="minicon",
@@ -46,9 +46,10 @@ class Master(MiniSoC, AMPSoC):
                          integrated_sram_size=8192,
                          ethmac_nrxslots=4,
                          ethmac_ntxslots=4,
+                         csr_address_width=15,
                          **kwargs)
         AMPSoC.__init__(self)
-        add_identifier(self)
+        add_identifier(self, gateware_identifier_str=gateware_identifier_str)
 
         platform = self.platform
         rtio_clk_freq = 150e6
@@ -67,8 +68,7 @@ class Master(MiniSoC, AMPSoC):
 
         self.submodules.drtio_transceiver = gth_ultrascale.GTH(
             clock_pads=platform.request("cdr_clk_clean", 0),
-            # use only a few channels to work around Vivado bug
-            data_pads=[platform.request("mch_fabric_d", i) for i in range(3)],
+            data_pads=[platform.request("mch_fabric_d", i) for i in range(11)],
             sys_clk_freq=self.clk_freq,
             rtio_clk_freq=rtio_clk_freq)
         self.csr_devices.append("drtio_transceiver")
@@ -164,9 +164,11 @@ def main():
     builder_args(parser)
     soc_sdram_args(parser)
     parser.set_defaults(output_dir="artiq_metlino")
+    parser.add_argument("--gateware-identifier-str", default=None,
+                        help="Override ROM identifier")
     args = parser.parse_args()
     args.variant = "master"
-    soc = Master(**soc_sdram_argdict(args))
+    soc = Master(gateware_identifier_str=args.gateware_identifier_str, **soc_sdram_argdict(args))
     build_artiq_soc(soc, builder_argdict(args))
 
 

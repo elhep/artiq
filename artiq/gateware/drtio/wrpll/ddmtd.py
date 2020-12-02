@@ -83,15 +83,13 @@ class DDMTDDeglitcherFirstEdge(Module):
         blind_counter = Signal(max=blind_period)
         self.sync.helper += [
             If(blind_counter != 0, blind_counter.eq(blind_counter - 1)),
-            If(rising, blind_counter.eq(blind_period - 1)),
+            If(input_signal_r, blind_counter.eq(blind_period - 1)),
             self.detect.eq(rising & (blind_counter == 0))
         ]
 
 
-class DDMTD(Module, AutoCSR):
+class DDMTD(Module):
     def __init__(self, counter, input_signal):
-        self.arm = CSR()
-        self.tag = CSRStatus(len(counter))
 
         # in helper clock domain
         self.h_tag = Signal(len(counter))
@@ -110,81 +108,114 @@ class DDMTD(Module, AutoCSR):
             )
         ]
 
-        tag_update_ps = PulseSynchronizer("helper", "sys")
-        self.submodules += tag_update_ps
-        self.comb += tag_update_ps.i.eq(self.h_tag_update)
-        tag_update = Signal()
-        self.sync += tag_update.eq(tag_update_ps.o)
-
-        tag = Signal(len(counter))
-        self.h_tag.attr.add("no_retiming")
-        self.specials += MultiReg(self.h_tag, tag)
-
-        self.sync += [
-            If(self.arm.re & self.arm.r, self.arm.w.eq(1)),
-            If(tag_update,
-                If(self.arm.w, self.tag.status.eq(tag)),
-                self.arm.w.eq(0),
-            )
-        ]
-
 
 class Collector(Module):
-    def __init__(self, N):
-        self.tag_helper = Signal((N, True))
-        self.tag_helper_update = Signal()
-        self.tag_main = Signal((N, True))
-        self.tag_main_update = Signal()
+    """Generates loop filter inputs from DDMTD outputs.
 
-        self.output = Signal((N + 1, True))
+    The input to the main DCXO lock loop filter is the difference between the
+    reference and main tags after unwrapping (see below).
+
+    The input to the helper DCXO lock loop filter is the difference between the
+    current reference tag and the previous reference tag after unwrapping.
+
+    When the WR PLL is locked, the following ideally (no noise/jitter) obtain:
+    - f_main = f_ref
+    - f_helper = f_ref * 2^N/(2^N+1)
+    - f_beat = f_ref - f_helper = f_ref / (2^N + 1) (cycle time is: dt=1/f_beat)
+    - the reference and main DCXO tags are equal to each other at every cycle
+      (the main DCXO lock drives this difference to 0)
+    - the reference and main DCXO tags both have the same value at each cycle
+      (the tag difference for each DDMTD is given by
+      f_helper*dt = f_helper/f_beat = 2^N, which causes the N-bit DDMTD counter
+      to wrap around and come back to its previous value)
+
+    Note that we currently lock the frequency of the helper DCXO to the
+    reference clock, not it's phase. As a result, while the tag differences are
+    controlled, their absolute values are arbitrary. We could consider moving
+    the helper lock to a phase lock at some point in the future...
+
+    Since the DDMTD counter is only N bits, it is possible for tag values to
+    wrap around. This will happen frequently if the locked tags happens to be
+    near the edges of the counter, so that jitter can easily cause a phase wrap.
+    But, it can also easily happen during lock acquisition or other transients.
+    To avoid glitches in the output, we unwrap the tag differences. Currently
+    we do this in hardware, but we should consider extending the processor to
+    allow us to do it inside the filters. Since the processor uses wider
+    signals, this would significantly extend the overall glitch-free
+    range of the PLL and may aid lock acquisition.
+    """
+    def __init__(self, N):
+        self.ref_stb = Signal()
+        self.main_stb = Signal()
+        self.tag_ref = Signal(N)
+        self.tag_main = Signal(N)
+
+        self.out_stb = Signal()
+        self.out_main = Signal((N+2, True))
+        self.out_helper = Signal((N+2, True))
+        self.out_tag_ref = Signal(N)
+        self.out_tag_main = Signal(N)
+
+        tag_ref_r = Signal(N)
+        tag_main_r = Signal(N)
+        main_tag_diff = Signal((N+2, True))
+        helper_tag_diff = Signal((N+2, True))
 
         # # #
 
         fsm = FSM(reset_state="IDLE")
         self.submodules += fsm
 
-        tag_collector = Signal((N + 1, True))
         fsm.act("IDLE",
-            If(self.tag_main_update & self.tag_helper_update,
-                NextValue(tag_collector, 0),
-                NextState("UPDATE")
-            ).Elif(self.tag_main_update,
-                NextValue(tag_collector, self.tag_main),
-                NextState("WAITHELPER")
-            ).Elif(self.tag_helper_update,
-                NextValue(tag_collector, -self.tag_helper),
+            NextValue(self.out_stb, 0),
+            If(self.ref_stb & self.main_stb,
+                NextValue(tag_ref_r, self.tag_ref),
+                NextValue(tag_main_r, self.tag_main),
+                NextState("DIFF")
+            ).Elif(self.ref_stb,
+                NextValue(tag_ref_r, self.tag_ref),
                 NextState("WAITMAIN")
+            ).Elif(self.main_stb,
+                NextValue(tag_main_r, self.tag_main),
+                NextState("WAITREF")
             )
         )
-        fsm.act("WAITHELPER",
-            If(self.tag_helper_update,
-                NextValue(tag_collector, tag_collector - self.tag_helper),
-                NextState("LEADCHECK")
+        fsm.act("WAITREF",
+            If(self.ref_stb,
+                NextValue(tag_ref_r, self.tag_ref),
+                NextState("DIFF")
             )
         )
         fsm.act("WAITMAIN",
-            If(self.tag_main_update,
-                NextValue(tag_collector, tag_collector + self.tag_main),
-                NextState("LAGCHECK")
+            If(self.main_stb,
+                NextValue(tag_main_r, self.tag_main),
+                NextState("DIFF")
             )
         )
-        # To compensate DDMTD counter roll-over when main is ahead of roll-over
-        # and helper is after roll-over
-        fsm.act("LEADCHECK",
-            If(tag_collector > 0,
-                NextValue(tag_collector, tag_collector - (2**N - 1))
-            ),
-            NextState("UPDATE")
+        fsm.act("DIFF",
+            NextValue(main_tag_diff, tag_main_r - tag_ref_r),
+            NextValue(helper_tag_diff, tag_ref_r - self.out_tag_ref),
+            NextState("UNWRAP")
         )
-        # To compensate DDMTD counter roll-over when helper is ahead of roll-over
-        # and main is after roll-over
-        fsm.act("LAGCHECK",
-            If(tag_collector < 0,
-                NextValue(tag_collector, tag_collector + (2**N - 1))
+        fsm.act("UNWRAP",
+            If(main_tag_diff - self.out_main > 2**(N-1),
+               NextValue(main_tag_diff, main_tag_diff - 2**N)
+            ).Elif(self.out_main - main_tag_diff > 2**(N-1),
+               NextValue(main_tag_diff, main_tag_diff + 2**N)
             ),
-            NextState("UPDATE")
+
+            If(helper_tag_diff - self.out_helper > 2**(N-1),
+               NextValue(helper_tag_diff, helper_tag_diff - 2**N)
+            ).Elif(self.out_helper - helper_tag_diff > 2**(N-1),
+               NextValue(helper_tag_diff, helper_tag_diff + 2**N)
+            ),
+            NextState("OUTPUT")
         )
-        fsm.act("UPDATE",
-            NextValue(self.output, tag_collector),
+        fsm.act("OUTPUT",
+            NextValue(self.out_tag_ref, tag_ref_r),
+            NextValue(self.out_tag_main, tag_main_r),
+            NextValue(self.out_main, main_tag_diff),
+            NextValue(self.out_helper, helper_tag_diff),
+            NextValue(self.out_stb, 1),
             NextState("IDLE")
         )

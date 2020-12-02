@@ -283,7 +283,7 @@ class Scheduler:
 
         # Instruction can be scheduled
 
-        self.remaining.remove(isn)            
+        self.remaining.remove(isn)
 
         for inp, minp in zip(isn.inputs, mapped_inputs):
             can_free = inp < 0 and all(inp != rinp for risn in self.remaining for rinp in risn.inputs)
@@ -354,7 +354,7 @@ def compile(processor, function):
     assert len(node.args.args) == 1
     arg = node.args.args[0].arg
     body = node.body
-    
+
     astcompiler = ASTCompiler()
     for node in body:
         if isinstance(node, ast.Global):
@@ -400,13 +400,35 @@ class NopUnit(BaseUnit):
 
 
 class OpUnit(BaseUnit):
-    def __init__(self, op, data_width, stages):
+    def __init__(self, op, data_width, stages, op_data_width=None):
         BaseUnit.__init__(self, data_width)
+        # work around Migen's mishandling of Verilog's cretinous operator width rules
+        if op_data_width is None:
+            op_data_width = data_width
 
-        o = op(self.i0, self.i1)
-        stb_o = self.stb_i
-        for i in range(stages):
-            n_o = Signal(data_width)
+        if stages > 1:
+            # Vivado backward retiming for DSP does not work correctly if DSP inputs
+            # are not registered.
+            i0 = Signal.like(self.i0)
+            i1 = Signal.like(self.i1)
+            stb_i = Signal()
+            self.sync += [
+                i0.eq(self.i0),
+                i1.eq(self.i1),
+                stb_i.eq(self.stb_i)
+            ]
+            output_stages = stages - 1
+        else:
+            i0, i1, stb_i = self.i0, self.i1, self.stb_i
+            output_stages = stages
+
+        o = Signal((op_data_width, True))
+        self.comb += o.eq(op(i0, i1))
+        stb_o = stb_i
+        for i in range(output_stages):
+            n_o = Signal((data_width, True))
+            if stages > 1:
+                n_o.attr.add(("retiming_backward", 1))
             n_stb_o = Signal()
             self.sync += [
                 n_o.eq(o),
@@ -535,7 +557,7 @@ class ProcessorImpl(Module):
             if len(pd.multiplier_shifts) != 1:
                 raise NotImplementedError
             multiplier = OpUnit(lambda a, b: a * b >> pd.multiplier_shifts[0],
-                pd.data_width, pd.multiplier_stages)
+                pd.data_width, pd.multiplier_stages, op_data_width=2*pd.data_width)
         else:
             multiplier = NopUnit(pd.data_width)
         minu = SelectUnit(operator.lt, pd.data_width)
@@ -591,53 +613,6 @@ class ProcessorImpl(Module):
 
 def make(function, **kwargs):
     proc = Processor(**kwargs)
-    cp = compile(proc, simple_test)
+    cp = compile(proc, function)
     cp.dimension_processor()
     return proc.implement(cp.encode(), cp.data)
-
-
-a = 0
-b = 0
-c = 0
-
-def foo(x):
-    global a, b, c
-    c = b
-    b = a
-    a = x
-    return 4748*a + 259*b - 155*c 
-
-
-def simple_test(x):
-    global a
-    a = a + (x*4 >> 1)
-    return a
-
-
-if __name__ == "__main__":
-    proc = Processor()
-    cp = compile(proc, simple_test)
-    cp.pretty_print()
-    cp.dimension_processor()
-    print(cp.encode())
-    proc_impl = proc.implement(cp.encode(), cp.data)
-
-    def send_values(values):
-        for value in values:
-            yield proc_impl.input.eq(value)
-            yield proc_impl.input_stb.eq(1)
-            yield
-            yield proc_impl.input.eq(0)
-            yield proc_impl.input_stb.eq(0)
-            yield
-            while (yield proc_impl.busy):
-                yield
-    @passive
-    def receive_values(callback):
-        while True:
-            while not (yield proc_impl.output_stb):
-                yield
-            callback((yield proc_impl.output))
-            yield
-
-    run_simulation(proc_impl, [send_values([42, 40, 10, 10]), receive_values(print)])

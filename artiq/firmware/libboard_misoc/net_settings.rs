@@ -33,7 +33,7 @@ pub fn get_adresses() -> NetAddresses {
         _ => {
             #[cfg(soc_platform = "kasli")]
             {
-                let eeprom = i2c_eeprom::EEPROM::kasli_eeprom();
+                let eeprom = i2c_eeprom::EEPROM::new();
                 hardware_addr =
                     eeprom.read_eui48()
                     .map(|addr_buf| EthernetAddress(addr_buf))

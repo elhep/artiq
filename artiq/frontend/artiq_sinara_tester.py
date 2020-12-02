@@ -50,6 +50,8 @@ class SinaraTester(EnvExperiment):
         self.urukuls = dict()
         self.samplers = dict()
         self.zotinos = dict()
+        self.fastinos = dict()
+        self.phasers = dict()
         self.grabbers = dict()
 
         ddb = self.get_device_db()
@@ -74,6 +76,10 @@ class SinaraTester(EnvExperiment):
                     self.samplers[name] = self.get_device(name)
                 elif (module, cls) == ("artiq.coredevice.zotino", "Zotino"):
                     self.zotinos[name] = self.get_device(name)
+                elif (module, cls) == ("artiq.coredevice.fastino", "Fastino"):
+                    self.fastinos[name] = self.get_device(name)
+                elif (module, cls) == ("artiq.coredevice.phaser", "Phaser"):
+                    self.phasers[name] = self.get_device(name)
                 elif (module, cls) == ("artiq.coredevice.grabber", "Grabber"):
                     self.grabbers[name] = self.get_device(name)
 
@@ -107,6 +113,8 @@ class SinaraTester(EnvExperiment):
         self.urukuls = sorted(self.urukuls.items(), key=lambda x: (x[1].cpld.bus.channel, x[1].chip_select))
         self.samplers = sorted(self.samplers.items(), key=lambda x: x[1].cnv.channel)
         self.zotinos = sorted(self.zotinos.items(), key=lambda x: x[1].bus.channel)
+        self.fastinos = sorted(self.fastinos.items(), key=lambda x: x[1].channel)
+        self.phasers = sorted(self.phasers.items(), key=lambda x: x[1].channel_base)
         self.grabbers = sorted(self.grabbers.items(), key=lambda x: x[1].channel_base)
 
     @kernel
@@ -251,6 +259,8 @@ class SinaraTester(EnvExperiment):
                 eeprom.write_i32(offset, eeprom_word)
         print("...done")
 
+        print("All urukul channels active.")
+        print("Check each channel amplitude (~1.6Vpp/8dbm at 50ohm) and frequency.")
         print("Frequencies:")
         for card_n, channels in enumerate(chunker(self.urukuls, 4)):
             for channel_n, (channel_name, channel_dev) in enumerate(channels):
@@ -262,7 +272,8 @@ class SinaraTester(EnvExperiment):
 
         sw = [channel_dev for channel_name, channel_dev in self.urukuls if hasattr(channel_dev, "sw")]
         if sw:
-            print("Testing RF switch control. Press ENTER when done.")
+            print("Testing RF switch control. Check LEDs at urukul RF ports.")
+            print("Press ENTER when done.")
             for swi in sw:
                 self.cfg_sw_off_urukul(swi)
             self.rf_switch_wave([swi.sw for swi in sw])
@@ -320,15 +331,123 @@ class SinaraTester(EnvExperiment):
             i += 1
         zotino.load()
 
+    @kernel
+    def zotinos_led_wave(self, zotinos):
+        while not is_enter_pressed():
+            self.core.break_realtime()
+            # do not fill the FIFOs too much to avoid long response times
+            t = now_mu() - self.core.seconds_to_mu(0.2)
+            while self.core.get_rtio_counter_mu() < t:
+                pass
+            for zotino in zotinos:
+                for i in range(8):
+                    zotino.set_leds(1 << i)
+                    delay(100*ms)
+                zotino.set_leds(0)
+                delay(100*ms)
+
     def test_zotinos(self):
-        print("*** Testing Zotino DACs.")
+        print("*** Testing Zotino DACs and USER LEDs.")
         print("Voltages:")
         for card_n, (card_name, card_dev) in enumerate(self.zotinos):
             voltages = [(-1)**i*(2.*card_n + .1*(i//2 + 1)) for i in range(32)]
             print(card_name, " ".join(["{:.1f}".format(x) for x in voltages]))
             self.set_zotino_voltages(card_dev, voltages)
         print("Press ENTER when done.")
-        input()
+        # Test switching on/off USR_LEDs at the same time
+        self.zotinos_led_wave(
+            [card_dev for _, (__, card_dev) in enumerate(self.zotinos)]
+        )
+
+    @kernel
+    def set_fastino_voltages(self, fastino, voltages):
+        self.core.break_realtime()
+        fastino.init()
+        delay(200*us)
+        i = 0
+        for voltage in voltages:
+            fastino.set_dac(i, voltage)
+            delay(100*us)
+            i += 1
+
+    @kernel
+    def fastinos_led_wave(self, fastinos):
+        while not is_enter_pressed():
+            self.core.break_realtime()
+            # do not fill the FIFOs too much to avoid long response times
+            t = now_mu() - self.core.seconds_to_mu(0.2)
+            while self.core.get_rtio_counter_mu() < t:
+                pass
+            for fastino in fastinos:
+                for i in range(8):
+                    fastino.set_leds(1 << i)
+                    delay(100*ms)
+                fastino.set_leds(0)
+                delay(100*ms)
+
+    def test_fastinos(self):
+        print("*** Testing Fastino DACs and USER LEDs.")
+        print("Voltages:")
+        for card_n, (card_name, card_dev) in enumerate(self.fastinos):
+            voltages = [(-1)**i*(2.*card_n + .1*(i//2 + 1)) for i in range(32)]
+            print(card_name, " ".join(["{:.1f}".format(x) for x in voltages]))
+            self.set_fastino_voltages(card_dev, voltages)
+        print("Press ENTER when done.")
+        # Test switching on/off USR_LEDs at the same time
+        self.fastinos_led_wave(
+            [card_dev for _, (__, card_dev) in enumerate(self.fastinos)]
+        )
+
+    @kernel
+    def set_phaser_frequencies(self, phaser, duc, osc):
+        self.core.break_realtime()
+        phaser.init()
+        delay(1*ms)
+        phaser.channel[0].set_duc_frequency(duc)
+        phaser.channel[0].set_duc_cfg()
+        phaser.channel[0].set_att(6*dB)
+        phaser.channel[1].set_duc_frequency(-duc)
+        phaser.channel[1].set_duc_cfg()
+        phaser.channel[1].set_att(6*dB)
+        phaser.duc_stb()
+        delay(1*ms)
+        for i in range(len(osc)):
+            phaser.channel[0].oscillator[i].set_frequency(osc[i])
+            phaser.channel[0].oscillator[i].set_amplitude_phase(.2)
+            phaser.channel[1].oscillator[i].set_frequency(-osc[i])
+            phaser.channel[1].oscillator[i].set_amplitude_phase(.2)
+            delay(1*ms)
+
+    @kernel
+    def phaser_led_wave(self, phasers):
+        while not is_enter_pressed():
+            self.core.break_realtime()
+            # do not fill the FIFOs too much to avoid long response times
+            t = now_mu() - self.core.seconds_to_mu(.2)
+            while self.core.get_rtio_counter_mu() < t:
+                pass
+            for phaser in phasers:
+                for i in range(6):
+                    phaser.set_leds(1 << i)
+                    delay(100*ms)
+                phaser.set_leds(0)
+                delay(100*ms)
+
+    def test_phasers(self):
+        print("*** Testing Phaser DACs and 6 USER LEDs.")
+        print("Frequencies:")
+        for card_n, (card_name, card_dev) in enumerate(self.phasers):
+            duc = (card_n + 1)*10*MHz
+            osc = [i*1*MHz for i in range(5)]
+            print(card_name,
+                  " ".join(["{:.0f}+{:.0f}".format(duc/MHz, f/MHz) for f in osc]),
+                  "MHz")
+            self.set_phaser_frequencies(card_dev, duc, osc)
+        print("Press ENTER when done.")
+        # Test switching on/off USR_LEDs at the same time
+        self.phaser_led_wave(
+            [card_dev for _, (__, card_dev) in enumerate(self.phasers)]
+        )
 
     @kernel
     def grabber_capture(self, card_dev, rois):
@@ -380,6 +499,10 @@ class SinaraTester(EnvExperiment):
             self.test_samplers()
         if self.zotinos:
             self.test_zotinos()
+        if self.fastinos:
+            self.test_fastinos()
+        if self.phasers:
+            self.test_phasers()
         if self.grabbers:
             self.test_grabbers()
 

@@ -204,8 +204,10 @@ class TTuple(Type):
         return hash(tuple(self.elts))
 
 class _TPointer(TMono):
-    def __init__(self):
-        super().__init__("pointer")
+    def __init__(self, elt=None):
+        if elt is None:
+            elt = TMono("int", {"width": 8})  # i8*
+        super().__init__("pointer", params={"elt": elt})
 
 class TFunction(Type):
     """
@@ -281,20 +283,29 @@ class TFunction(Type):
     def __hash__(self):
         return hash((_freeze(self.args), _freeze(self.optargs), self.ret))
 
-class TCFunction(TFunction):
+class TExternalFunction(TFunction):
     """
-    A function type of a runtime-provided C function.
+    A type of an externally-provided function.
 
-    :ivar name: (str) C function name
-    :ivar flags: (set of str) C function flags.
+    This can be any function following the C ABI, such as provided by the
+    C/Rust runtime, or a compiler backend intrinsic. The mangled name to link
+    against is encoded as part of the type.
+
+    :ivar name: (str) external symbol name.
+        This will be the symbol linked against (following any extra C name
+        mangling rules).
+    :ivar flags: (set of str) function flags.
         Flag ``nounwind`` means the function never raises an exception.
         Flag ``nowrite`` means the function never writes any memory
         that the ARTIQ Python code can observe.
+    :ivar broadcast_across_arrays: (bool)
+        If True, the function is transparently applied element-wise when called
+        with TArray arguments.
     """
 
     attributes = OrderedDict()
 
-    def __init__(self, args, ret, name, flags={}):
+    def __init__(self, args, ret, name, flags=set(), broadcast_across_arrays=False):
         assert isinstance(flags, set)
         for flag in flags:
             assert flag in {'nounwind', 'nowrite'}
@@ -302,11 +313,12 @@ class TCFunction(TFunction):
         self.name  = name
         self.delay = TFixedDelay(iodelay.Const(0))
         self.flags = flags
+        self.broadcast_across_arrays = broadcast_across_arrays
 
     def unify(self, other):
         if other is self:
             return
-        if isinstance(other, TCFunction) and \
+        if isinstance(other, TExternalFunction) and \
                 self.name == other.name:
             super().unify(other)
         elif isinstance(other, TVar):
@@ -402,6 +414,11 @@ class TBuiltin(Type):
 class TBuiltinFunction(TBuiltin):
     """
     A type of a builtin function.
+
+    Builtin functions are treated specially throughout all stages of the
+    compilation process according to their name (e.g. calls may not actually
+    lower to a function call). See :class:`TExternalFunction` for externally
+    defined functions that are otherwise regular.
     """
 
 class TConstructor(TBuiltin):
@@ -607,12 +624,12 @@ def is_function(typ):
 def is_rpc(typ):
     return isinstance(typ.find(), TRPC)
 
-def is_c_function(typ, name=None):
+def is_external_function(typ, name=None):
     typ = typ.find()
     if name is None:
-        return isinstance(typ, TCFunction)
+        return isinstance(typ, TExternalFunction)
     else:
-        return isinstance(typ, TCFunction) and \
+        return isinstance(typ, TExternalFunction) and \
             typ.name == name
 
 def is_builtin(typ, name=None):
@@ -630,6 +647,15 @@ def is_builtin_function(typ, name=None):
     else:
         return isinstance(typ, TBuiltinFunction) and \
             typ.name == name
+
+def is_broadcast_across_arrays(typ):
+    # For now, broadcasting is only exposed to predefined external functions, and
+    # statically selected. Might be extended to user-defined functions if the design
+    # pans out.
+    typ = typ.find()
+    if not isinstance(typ, TExternalFunction):
+        return False
+    return typ.broadcast_across_arrays
 
 def is_constructor(typ, name=None):
     typ = typ.find()
@@ -735,12 +761,14 @@ class TypePrinter(object):
             else:
                 return "%s(%s)" % (typ.name, ", ".join(
                     ["%s=%s" % (k, self.name(typ.params[k], depth + 1)) for k in typ.params]))
+        elif isinstance(typ, _TPointer):
+            return "{}*".format(self.name(typ["elt"], depth + 1))
         elif isinstance(typ, TTuple):
             if len(typ.elts) == 1:
                 return "(%s,)" % self.name(typ.elts[0], depth + 1)
             else:
                 return "(%s)" % ", ".join([self.name(typ, depth + 1) for typ in typ.elts])
-        elif isinstance(typ, (TFunction, TCFunction)):
+        elif isinstance(typ, (TFunction, TExternalFunction)):
             args = []
             args += [ "%s:%s" % (arg, self.name(typ.args[arg], depth + 1))
                      for arg in typ.args]
@@ -754,7 +782,7 @@ class TypePrinter(object):
             elif not (delay.is_fixed() and iodelay.is_zero(delay.duration)):
                 signature += " " + self.name(delay, depth + 1)
 
-            if isinstance(typ, TCFunction):
+            if isinstance(typ, TExternalFunction):
                 return "[ffi {}]{}".format(repr(typ.name), signature)
             elif isinstance(typ, TFunction):
                 return signature

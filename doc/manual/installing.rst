@@ -23,10 +23,10 @@ Once Nix is installed, add the M-Labs package channel with: ::
 
   $ nix-channel --add https://nixbld.m-labs.hk/channel/custom/artiq/full-beta/artiq-full
 
-Those channels track `nixpkgs 19.09 <https://github.com/NixOS/nixpkgs/tree/release-19.09>`_. You can check the latest status through the `Hydra interface <https://nixbld.m-labs.hk>`_. As the Nix package manager default installation uses the development version of nixpkgs, we need to tell it to switch to the release: ::
+Those channels track `nixpkgs 20.09 <https://github.com/NixOS/nixpkgs/tree/release-20.09>`_. You can check the latest status through the `Hydra interface <https://nixbld.m-labs.hk>`_. As the Nix package manager default installation uses the development version of nixpkgs, we need to tell it to switch to the release: ::
 
   $ nix-channel --remove nixpkgs
-  $ nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs
+  $ nix-channel --add https://nixos.org/channels/nixos-20.09 nixpkgs
 
 Finally, make all the channel changes effective: ::
 
@@ -48,8 +48,8 @@ Installing multiple packages and making them visible to the ARTIQ commands requi
 ::
 
   let
-    # Contains the NixOS package collection. ARTIQ depends on some of them, and
-    # you may also want certain packages from there.
+    # pkgs contains the NixOS package collection. ARTIQ depends on some of them, and
+    # you may want some additional packages from there.
     pkgs = import <nixpkgs> {};
     artiq-full = import <artiq-full> { inherit pkgs; };
   in
@@ -57,25 +57,39 @@ Installing multiple packages and making them visible to the ARTIQ commands requi
       buildInputs = [
         (pkgs.python3.withPackages(ps: [
           # List desired Python packages here.
+
+          # You probably want these two.
           artiq-full.artiq
           artiq-full.artiq-comtools
-          # The board packages are also "Python" packages. You only need a board
-          # package if you intend to reflash that board (those packages contain
-          # only board firmware).
-          artiq-full.artiq-board-kc705-nist_clock
-          artiq-full.artiq-board-kasli-wipm
-          # from the NixOS package collection:
-          ps.paramiko  # needed for flashing boards remotely (artiq_flash -H)
-          ps.pandas
-          ps.numpy
-          ps.scipy
-          ps.numba
-          (ps.matplotlib.override { enableQt = true; })
-          ps.bokeh
+
+          # You need a board support package if and only if you intend to flash
+          # a board (those packages contain only board firmware).
+          # The lines below are only examples, you need to select appropriate
+          # packages for your boards.
+          #artiq-full.artiq-board-kc705-nist_clock
+          #artiq-full.artiq-board-kasli-wipm
+          #ps.paramiko  # needed if and only if flashing boards remotely (artiq_flash -H)
+
+          # The NixOS package collection contains many other packages that you may find
+          # interesting for your research. Here are some examples:
+          #ps.pandas
+          #ps.numpy
+          #ps.scipy
+          #ps.numba
+          #(ps.matplotlib.override { enableQt = true; })
+          #ps.bokeh
+          #ps.cirq
+          #ps.qiskit
+          #ps.qutip
         ]))
+
         # List desired non-Python packages here
-        artiq-full.openocd  # needed for flashing boards, also provides proxy bitstreams
-        pkgs.spyder
+        #artiq-full.openocd  # needed if and only if flashing boards
+        # Other potentially interesting packages from the NixOS package collection:
+        #pkgs.gtkwave
+        #pkgs.spyder
+        #pkgs.R
+        #pkgs.julia
       ];
     }
 
@@ -101,17 +115,16 @@ After installing either Anaconda or Miniconda, open a new terminal (also known a
 
 Executing just ``conda`` should print the help of the ``conda`` command. If your shell does not find the ``conda`` command, make sure that the Conda binaries are in your ``$PATH``. If ``$ echo $PATH`` does not show the Conda directories, add them: execute ``$ export PATH=$HOME/miniconda3/bin:$PATH`` if you installed Conda into ``~/miniconda3``.
 
-Download the `ARTIQ installer script <https://raw.githubusercontent.com/m-labs/artiq/master/install-with-conda.py>`_ and edit its beginning to define the Conda environment name (you can leave the default environment name if you are just getting started) and select the desired ARTIQ packages. Non-ARTIQ packages should be installed manually later.
-
-.. note::
-  If you do not need to flash boards, the ``artiq`` package is sufficient. The packages named ``artiq-board-*`` contain only firmware for the FPGA board and are never necessary for using an ARTIQ system without reflashing it.
-
 Controllers for third-party devices (e.g. Thorlabs TCube, Lab Brick Digital Attenuator, etc.) that are not shipped with ARTIQ can also be installed with this script. Browse `Hydra <https://nixbld.m-labs.hk/project/artiq>`_ or see the list of NDSPs in this manual to find the names of the corresponding packages, and list them at the beginning of the script.
 
-Make sure the base Conda environment is activated and then run the installer script: ::
+Set up the Conda channel and install ARTIQ into a new Conda environment: ::
 
-  $ conda activate base
-  $ python install-with-conda.py
+    $ conda config --prepend channels https://conda.m-labs.hk/artiq-beta
+    $ conda config --append channels conda-forge
+    $ conda create -n artiq artiq
+
+.. note::
+  If you do not need to flash boards, the ``artiq`` package is sufficient. The packages named ``artiq-board-*`` contain only firmware for the FPGA board, and you should not install them unless you are reflashing an FPGA board. Controllers for third-party devices (e.g. Thorlabs TCube, Lab Brick Digital Attenuator, etc.) that are not shipped with ARTIQ can also be installed with Conda. Browse `Hydra <https://nixbld.m-labs.hk/project/artiq>`_ or see the list of NDSPs in this manual to find the names of the corresponding packages.
 
 After the installation, activate the newly created environment by name. ::
 
@@ -137,7 +150,7 @@ Upgrading ARTIQ (with Conda)
 When upgrading ARTIQ or when testing different versions it is recommended that new Conda environments are created instead of upgrading the packages in existing environments.
 Keep previous environments around until you are certain that they are not needed anymore and a new environment is known to work correctly.
 
-To install the latest version, just select a different environment name and run the installer script again.
+To install the latest version, just select a different environment name and run the installation command again.
 
 Switching between Conda environments using commands such as ``$ conda deactivate artiq-6`` and ``$ conda activate artiq-5`` is the recommended way to roll back to previous versions of ARTIQ.
 
@@ -226,20 +239,22 @@ The JTAG adapter is integrated into the Kasli board; for flashing (and debugging
 Setting up the core device IP networking
 ----------------------------------------
 
-For Kasli, insert a SFP/RJ45 transceiver (normally included with purchases from M-Labs and QUARTIQ) into the SFP0 port and connect it to a gigabit Ethernet port in your network. It is necessary that the port be gigabit - 10/100 ports cannot be used. If you need to interface Kasli with 10/100 network equipment, connect them through a gigabit switch.
+For Kasli, insert a SFP/RJ45 transceiver (normally included with purchases from M-Labs and QUARTIQ) into the SFP0 port and connect it to an Ethernet port in your network. If the port is 10Mbps or 100Mbps and not 1000Mbps, make sure that the SFP/RJ45 transceiver supports the lower rate. Many SFP/RJ45 transceivers only support the 1000Mbps rate. If you do not have a SFP/RJ45 transceiver that supports 10Mbps and 100Mbps rates, you may instead use a gigabit Ethernet switch in the middle to perform rate conversion.
 
 You can also insert other types of SFP transceivers into Kasli if you wish to use it directly in e.g. an optical fiber Ethernet network.
 
-If you purchased a device from M-Labs, it already comes with a valid MAC address and an IP address, usually ``192.168.1.75``. Once you can reach this IP, it can be changed with: ::
+If you purchased a Kasli device from M-Labs, it usually comes with the IP address ``192.168.1.75``. Once you can reach this IP, it can be changed with: ::
 
   $ artiq_coremgmt -D 192.168.1.75 config write -s ip [new IP]
 
 and then reboot the device (with ``artiq_flash start`` or a power cycle).
 
-In other cases, install OpenOCD as before, and flash the IP and MAC addresses directly: ::
+In other cases, install OpenOCD as before, and flash the IP (and, if necessary, MAC) addresses directly: ::
 
   $ artiq_mkfs flash_storage.img -s mac xx:xx:xx:xx:xx:xx -s ip xx.xx.xx.xx
   $ artiq_flash -t [board] -V [variant] -f flash_storage.img storage start
+
+For Kasli devices, flashing a MAC address is not necessary as they can obtain it from their EEPROM.
 
 Check that you can ping the device. If ping fails, check that the Ethernet link LED is ON - on Kasli, it is the LED next to the SFP0 connector. As a next step, look at the messages emitted on the UART during boot. Use a program such as flterm or PuTTY to connect to the device's serial port at 115200bps 8-N-1 and reboot the device. On Kasli, the serial port is on FTDI channel 2 with v1.1 hardware (with channel 0 being JTAG) and on FTDI channel 1 with v1.0 hardware.
 
@@ -272,9 +287,9 @@ For DRTIO systems, the startup kernel should wait until the desired destinations
 
 If you are using DRTIO and the default routing table (for a star topology) is not suitable to your needs, prepare and load a different routing table. See :ref:`Using DRTIO <using-drtio>`.
 
-* Select the RTIO clock source (KC705 only)
+* Select the RTIO clock source (KC705 and Kasli)
 
-The KC705 may use either an external clock signal or its internal clock. The clock is selected at power-up. Use one of these commands: ::
+The KC705 may use either an external clock signal or its internal clock. The clock is selected at power-up. For Kasli, setting the RTIO clock source to "external" would bypass the Si5324 synthesiser, requiring that an input clock be present. To select the source, use one of these commands: ::
 
   $ artiq_coremgmt config write -s rtio_clock i  # internal clock (default)
   $ artiq_coremgmt config write -s rtio_clock e  # external clock

@@ -109,7 +109,14 @@ def peripheral_mirny(module, peripheral):
 def peripheral_fastino(module, peripheral):
     if len(peripheral["ports"]) != 1:
         raise ValueError("wrong number of ports")
-    eem.Fastino.add_std(module, peripheral["ports"][0])
+    eem.Fastino.add_std(module, peripheral["ports"][0],
+        peripheral.get("log2_width", 0))
+
+
+def peripheral_phaser(module, peripheral):
+    if len(peripheral["ports"]) != 1:
+        raise ValueError("wrong number of ports")
+    eem.Phaser.add_std(module, peripheral["ports"][0])
 
 
 peripheral_processors = {
@@ -122,6 +129,7 @@ peripheral_processors = {
     "grabber": peripheral_grabber,
     "mirny": peripheral_mirny,
     "fastino": peripheral_fastino,
+    "phaser": peripheral_phaser,
 }
 
 
@@ -153,12 +161,13 @@ class GenericStandalone(StandaloneBase):
 
         self.rtio_channels = []
         add_peripherals(self, description["peripherals"])
-        for i in (1, 2):
-            print("SFP LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
-            sfp_ctl = self.platform.request("sfp_ctl", i)
-            phy = ttl_simple.Output(sfp_ctl.led)
-            self.submodules += phy
-            self.rtio_channels.append(rtio.Channel.from_phy(phy))
+        if hw_rev in ("v1.0", "v1.1"):
+            for i in (1, 2):
+                print("SFP LED at RTIO channel 0x{:06x}".format(len(self.rtio_channels)))
+                sfp_ctl = self.platform.request("sfp_ctl", i)
+                phy = ttl_simple.Output(sfp_ctl.led)
+                self.submodules += phy
+                self.rtio_channels.append(rtio.Channel.from_phy(phy))
 
         self.config["HAS_RTIO_LOG"] = None
         self.config["RTIO_LOG_CHANNEL"] = len(self.rtio_channels)
@@ -251,6 +260,8 @@ def main():
     parser.set_defaults(output_dir="artiq_kasli")
     parser.add_argument("description", metavar="DESCRIPTION",
                         help="JSON system description file")
+    parser.add_argument("--gateware-identifier-str", default=None,
+                        help="Override ROM identifier")
     args = parser.parse_args()
 
     with open(args.description, "r") as f:
@@ -268,7 +279,7 @@ def main():
     else:
         raise ValueError("Invalid base")
 
-    soc = cls(description, **soc_kasli_argdict(args))
+    soc = cls(description, gateware_identifier_str=args.gateware_identifier_str, **soc_kasli_argdict(args))
     args.variant = description["variant"]
     build_artiq_soc(soc, builder_argdict(args))
 

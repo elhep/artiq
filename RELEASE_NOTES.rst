@@ -8,7 +8,52 @@ ARTIQ-6
 
 Highlights:
 
+* New hardware support:
+   - Zynq SoC core devices, enabling kernels to run on 1 GHz CPU core with a floating-point
+     unit for faster computations. This currently requires an external
+     repository (https://git.m-labs.hk/m-labs/artiq-zynq) and only supports the ZC706.
+   - Mirny 4-channel wide-band PLL/VCO-based microwave frequency synthesiser
+   - Fastino 32-channel, 3MS/s per channel, 16-bit DAC EEM
+   - Kasli 2.0
+* ARTIQ Python (core device kernels):
+   - Multidimensional arrays are now available on the core device, using NumPy syntax.
+     Elementwise operations (e.g. ``+``, ``/``), matrix multiplication (``@``) and
+     multidimensional indexing are supported; slices and views are not yet.
+   - Trigonometric and other common math functions from NumPy are now available on the
+     core device (e.g. ``numpy.sin``), both for scalar arguments and implicitly
+     broadcast across multidimensional arrays.
+   - Failed assertions now raise ``AssertionError``\ s instead of aborting kernel
+     execution.
+* Performance improvements:
+   - SERDES TTL inputs can now detect edges on pulses that are shorter
+     than the RTIO period (https://github.com/m-labs/artiq/issues/1432)
+   - Improved performance for kernel RPC involving list and array.
+* Coredevice SI to mu conversions now always return valid codes, or raise a ``ValueError``.
+* Zotino now exposes  ``voltage_to_mu()``
+* ``ad9910``: The maximum amplitude scale factor is now ``0x3fff`` (was ``0x3ffe``
+  before).
+* Dashboard:
+   - Applets now restart if they are running and a ccb call changes their spec
+   - A "Quick Open" dialog to open experiments by typing part of their name can
+     be brought up Ctrl-P (Ctrl+Return to immediately submit the selected entry
+     with the default arguments).
+* Experiment results are now always saved to HDF5, even if run() fails.
+* Core device: ``panic_reset 1`` now correctly resets the kernel CPU as well if
+  communication CPU panic occurs.
+* NumberValue accepts a ``type`` parameter specifying the output as ``int`` or ``float``
+* A parameter ``--identifier-str`` has been added to many targets to aid
+  with reproducible builds.
+* Python 3.7 support in Conda packages.
+
 Breaking changes:
+
+* ``artiq_netboot`` has been moved to its own repository at
+  https://git.m-labs.hk/m-labs/artiq-netboot
+* Core device watchdogs have been removed.
+* The ARTIQ compiler now implements arrays following NumPy semantics, rather than as a
+  thin veneer around lists. Most prior use cases of NumPy arrays in kernels should work
+  unchanged with the new implementation, but the behavior might differ slightly in some
+  cases (for instance, non-rectangular arrays are not currently supported).
 
 
 ARTIQ-5
@@ -41,15 +86,15 @@ Highlights:
    - Synchronization calibration data can be read from EEPROM.
 * A gateware-level input edge counter has been added, which offers higher
   throughput and increased flexibility over the usual TTL input PHYs where
-  edge timestamps are not required. See `artiq.coredevice.edge_counter` for
-  the core device driver and `artiq.gateware.rtio.phy.edge_counter`/
-  `artiq.gateware.eem.DIO.add_std` for the gateware components.
+  edge timestamps are not required. See ``artiq.coredevice.edge_counter`` for
+  the core device driver and ``artiq.gateware.rtio.phy.edge_counter``/
+  ``artiq.gateware.eem.DIO.add_std`` for the gateware components.
 * With DRTIO, Siphaser uses a better calibration mechanism.
   See: https://github.com/m-labs/artiq/commit/cc58318500ecfa537abf24127f2c22e8fe66e0f8
 * Schedule updates can be sent to influxdb (artiq_influxdb_schedule).
 * Experiments can now programatically set their default pipeline, priority, and flush flag.
 * List datasets can now be efficiently appended to from experiments using
-  `artiq.language.environment.HasEnvironment.append_to_dataset`.
+  ``artiq.language.environment.HasEnvironment.append_to_dataset``.
 * The core device now supports IPv6.
 * To make development easier, the bootloader can receive firmware and secondary FPGA
   gateware from the network.
@@ -59,8 +104,8 @@ Highlights:
 
 Breaking changes:
 
-* The `artiq.coredevice.ad9910.AD9910` and
-  `artiq.coredevice.ad9914.AD9914` phase reference timestamp parameters
+* The ``artiq.coredevice.ad9910.AD9910`` and
+  ``artiq.coredevice.ad9914.AD9914`` phase reference timestamp parameters
   have been renamed to ``ref_time_mu`` for consistency, as they are in machine
   units.
 * The controller manager now ignores device database entries without the

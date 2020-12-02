@@ -485,6 +485,21 @@ class PeripheralManager:
             channel=rtio_offset)
         return 1
 
+    def process_phaser(self, rtio_offset, peripheral):
+        self.gen("""
+            device_db["{name}"] = {{
+                "type": "local",
+                "module": "artiq.coredevice.phaser",
+                "class": "Phaser",
+                "arguments": {{
+                    "channel_base": 0x{channel:06x},
+                    "miso_delay": 1,
+                }}
+            }}""",
+            name=self.get_name("phaser"),
+            channel=rtio_offset)
+        return 2
+
     def process(self, rtio_offset, peripheral):
         processor = getattr(self, "process_"+str(peripheral["type"]))
         return processor(rtio_offset, peripheral)
@@ -520,7 +535,7 @@ def process(output, master_description, satellites):
     for peripheral in master_description["peripherals"]:
         n_channels = pm.process(rtio_offset, peripheral)
         rtio_offset += n_channels
-    if base == "standalone":
+    if base == "standalone" and master_description["hw_rev"] in ("v1.0", "v1.1"):
         n_channels = pm.add_sfp_leds(rtio_offset)
         rtio_offset += n_channels
 

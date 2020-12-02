@@ -53,7 +53,6 @@ mod mgmt;
 mod profiler;
 mod kernel;
 mod kern_hwreq;
-mod watchdog;
 mod session;
 #[cfg(any(has_rtio_moninj, has_drtio))]
 mod moninj;
@@ -99,6 +98,18 @@ fn startup() {
     setup_log_levels();
     #[cfg(has_i2c)]
     board_misoc::i2c::init().expect("I2C initialization failed");
+    #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
+    let (mut io_expander0, mut io_expander1);
+    #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
+    {
+        io_expander0 = board_misoc::io_expander::IoExpander::new(0);
+        io_expander1 = board_misoc::io_expander::IoExpander::new(1);
+        io_expander0.init().expect("I2C I/O expander #0 initialization failed");
+        io_expander1.init().expect("I2C I/O expander #1 initialization failed");
+        io_expander0.set_oe(0, 1 << 1).unwrap();
+        io_expander0.set(0, 1, false);
+        io_expander0.service().unwrap();
+    }
     rtio_clocking::init();
 
     let mut net_device = unsafe { ethmac::EthernetDevice::new() };
@@ -210,6 +221,12 @@ fn startup() {
         if let Some(_net_stats_diff) = net_stats.update() {
             debug!("ethernet mac:{}", ethmac::EthernetStatistics::new());
         }
+
+        #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
+        {
+            io_expander0.service().expect("I2C I/O expander #0 service failed");
+            io_expander1.service().expect("I2C I/O expander #1 service failed");
+        }
     }
 }
 
@@ -283,6 +300,11 @@ pub fn oom(layout: core::alloc::Layout) -> ! {
 pub fn panic_impl(info: &core::panic::PanicInfo) -> ! {
     irq::set_ie(false);
 
+    #[cfg(has_error_led)]
+    unsafe {
+        csr::error_led::out_write(1);
+    }
+
     if let Some(location) = info.location() {
         print!("panic at {}:{}:{}", location.file(), location.line(), location.column());
     } else {
@@ -303,7 +325,10 @@ pub fn panic_impl(info: &core::panic::PanicInfo) -> ! {
 
     if config::read_str("panic_reset", |r| r == Ok("1")) {
         println!("restarting...");
-        unsafe { boot::reset() }
+        unsafe {
+            kernel::stop();
+            boot::reset();
+        }
     } else {
         println!("halting.");
         println!("use `artiq_coremgmt config write -s panic_reset 1` to restart instead");

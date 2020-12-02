@@ -115,7 +115,7 @@ class I2CMasterMachine(Module):
         run = Signal()
         idle = Signal()
         self.comb += [
-            run.eq(self.start | self.stop | self.write),
+            run.eq((self.start | self.stop | self.write) & self.ready),
             idle.eq(~run & fsm.ongoing("IDLE")),
             self.cg.ce.eq(~idle),
             fsm.ce.eq(run | self.cg.clk2x),
@@ -255,7 +255,7 @@ class Si549(Module, AutoCSR):
         self.gpio_out = CSRStorage(2)
         self.gpio_oe = CSRStorage(2)
 
-        self.i2c_divider = CSRStorage(16, reset=2500)
+        self.i2c_divider = CSRStorage(16, reset=75)
         self.i2c_address = CSRStorage(7)
         self.errors = CSR(2)
 
@@ -296,8 +296,8 @@ class Si549(Module, AutoCSR):
                 ts_scl.o.eq(self.gpio_out.storage[0]),
                 ts_scl.oe.eq(self.gpio_oe.storage[0])
             ).Else(
-                ts_scl.o.eq(programmer.scl),
-                ts_scl.oe.eq(1)
+                ts_scl.o.eq(0),
+                ts_scl.oe.eq(~programmer.scl)
             )
         ]
 

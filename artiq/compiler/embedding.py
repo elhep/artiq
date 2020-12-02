@@ -14,7 +14,7 @@ from pythonparser import lexer as source_lexer, parser as source_parser
 from Levenshtein import ratio as similarity, jaro_winkler
 
 from ..language import core as language_core
-from . import types, builtins, asttyped, prelude
+from . import types, builtins, asttyped, math_fns, prelude
 from .transforms import ASTTypedRewriter, Inferencer, IntMonomorphizer, TypedtreePrinter
 from .transforms.asttyped_rewriter import LocalExtractor
 
@@ -166,6 +166,10 @@ class ASTSynthesizer:
             typ = builtins.TBool()
             return asttyped.NameConstantT(value=value, type=typ,
                                           loc=self._add(repr(value)))
+        elif value is numpy.float:
+            typ = builtins.fn_float()
+            return asttyped.NameConstantT(value=None, type=typ,
+                                          loc=self._add("numpy.float"))
         elif value is numpy.int32:
             typ = builtins.fn_int32()
             return asttyped.NameConstantT(value=None, type=typ,
@@ -233,20 +237,11 @@ class ASTSynthesizer:
                                    begin_loc=begin_loc, end_loc=end_loc,
                                    loc=begin_loc.join(end_loc))
         elif isinstance(value, numpy.ndarray):
-            begin_loc = self._add("numpy.array([")
-            elts = []
-            for index, elt in enumerate(value):
-                elts.append(self.quote(elt))
-                if index < len(value) - 1:
-                    self._add(", ")
-            end_loc   = self._add("])")
-
-            return asttyped.ListT(elts=elts, ctx=None, type=builtins.TArray(),
-                                  begin_loc=begin_loc, end_loc=end_loc,
-                                  loc=begin_loc.join(end_loc))
+            return self.call(numpy.array, [list(value)], {})
         elif inspect.isfunction(value) or inspect.ismethod(value) or \
                 isinstance(value, pytypes.BuiltinFunctionType) or \
-                isinstance(value, SpecializedFunction):
+                isinstance(value, SpecializedFunction) or \
+                isinstance(value, numpy.ufunc):
             if inspect.ismethod(value):
                 quoted_self   = self.quote(value.__self__)
                 function_type = self.quote_function(value.__func__, self.expanded_from)
@@ -1001,9 +996,9 @@ class Stitcher:
             self.engine.process(diag)
             ret_type = types.TVar()
 
-        function_type = types.TCFunction(arg_types, ret_type,
-                                         name=function.artiq_embedded.syscall,
-                                         flags=function.artiq_embedded.flags)
+        function_type = types.TExternalFunction(arg_types, ret_type,
+                                                name=function.artiq_embedded.syscall,
+                                                flags=function.artiq_embedded.flags)
         self.functions[function] = function_type
         return function_type
 
@@ -1057,7 +1052,11 @@ class Stitcher:
             host_function = function
 
         if function in self.functions:
-            pass
+            return self.functions[function]
+
+        math_type = math_fns.match(function)
+        if math_type is not None:
+            self.functions[function] = math_type
         elif not hasattr(host_function, "artiq_embedded") or \
                 (host_function.artiq_embedded.core_name is None and
                  host_function.artiq_embedded.portable is False and

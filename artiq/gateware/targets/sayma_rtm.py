@@ -16,6 +16,7 @@ from misoc.targets.sayma_rtm import BaseSoC, soc_sayma_rtm_args, soc_sayma_rtm_a
 from misoc.integration.builder import Builder, builder_args, builder_argdict
 
 from artiq.gateware import rtio
+from artiq.gateware import jesd204_tools
 from artiq.gateware.rtio.phy import ttl_simple, ttl_serdes_7series
 from artiq.gateware.drtio.transceiver import gtp_7series
 from artiq.gateware.drtio.siphaser import SiPhaser7Series
@@ -74,11 +75,11 @@ class _SatelliteBase(BaseSoC):
     }
     mem_map.update(BaseSoC.mem_map)
 
-    def __init__(self, rtio_clk_freq, *, with_wrpll, **kwargs):
+    def __init__(self, rtio_clk_freq, *, with_wrpll, gateware_identifier_str, **kwargs):
         BaseSoC.__init__(self,
                  cpu_type="or1k",
                  **kwargs)
-        add_identifier(self)
+        add_identifier(self, gateware_identifier_str=gateware_identifier_str)
         self.rtio_clk_freq = rtio_clk_freq
 
         platform = self.platform
@@ -163,12 +164,13 @@ class _SatelliteBase(BaseSoC):
             platform.add_false_path_constraints(
                 self.crg.cd_sys.clk, self.siphaser.mmcm_freerun_output)
             self.csr_devices.append("siphaser")
+            self.submodules.si5324_rst_n = gpio.GPIOOut(platform.request("si5324").rst_n)
+            self.csr_devices.append("si5324_rst_n")
             i2c = self.platform.request("i2c")
             self.submodules.i2c = gpio.GPIOTristate([i2c.scl, i2c.sda])
             self.csr_devices.append("i2c")
             self.config["I2C_BUS_COUNT"] = 1
             self.config["HAS_SI5324"] = None
-            self.config["SI5324_SOFT_RESET"] = None
 
         platform.add_period_constraint(gtp.txoutclk, rtio_clk_period)
         platform.add_period_constraint(gtp.rxoutclk, rtio_clk_period)
@@ -257,6 +259,15 @@ class Satellite(_SatelliteBase):
             platform.request("hmc7043_out_en"))
         self.csr_devices.append("hmc7043_out_en")
 
+        # DDMTD
+        sysref_pads = platform.request("rtm_fpga_sysref", 0)
+        self.submodules.sysref_ddmtd = jesd204_tools.DDMTD(sysref_pads, self.rtio_clk_freq)
+        self.csr_devices.append("sysref_ddmtd")
+        platform.add_false_path_constraints(
+            self.sysref_ddmtd.cd_helper.clk, self.drtio_transceiver.gtps[0].txoutclk)
+        platform.add_false_path_constraints(
+            self.sysref_ddmtd.cd_helper.clk, self.crg.cd_sys.clk)
+
 
 class SatmanSoCBuilder(Builder):
     def __init__(self, *args, **kwargs):
@@ -288,11 +299,15 @@ def main():
     parser.add_argument("--rtio-clk-freq",
         default=150, type=int, help="RTIO clock frequency in MHz")
     parser.add_argument("--with-wrpll", default=False, action="store_true")
+    parser.add_argument("--gateware-identifier-str", default=None,
+                        help="Override ROM identifier")
     parser.set_defaults(output_dir=os.path.join("artiq_sayma", "rtm"))
     args = parser.parse_args()
 
     soc = Satellite(
-        rtio_clk_freq=1e6*args.rtio_clk_freq, with_wrpll=args.with_wrpll,
+        rtio_clk_freq=1e6*args.rtio_clk_freq,
+        with_wrpll=args.with_wrpll,
+        gateware_identifier_str=args.gateware_identifier_str,
         **soc_sayma_rtm_argdict(args))
     builder = SatmanSoCBuilder(soc, **builder_argdict(args))
     try:

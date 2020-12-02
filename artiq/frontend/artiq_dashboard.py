@@ -5,6 +5,7 @@ import asyncio
 import atexit
 import os
 import logging
+import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from quamash import QEventLoop
@@ -14,7 +15,6 @@ from sipyco.broadcast import Receiver
 from sipyco import common_args
 from sipyco.asyncio_tools import atexit_register_coroutine
 
-from artiq import __version__ as artiq_version
 from artiq import __artiq_dir__ as artiq_dir, __version__ as artiq_version
 from artiq.tools import get_user_config_dir
 from artiq.gui.models import ModelSubscriber
@@ -104,6 +104,9 @@ def main():
     app = QtWidgets.QApplication(["ARTIQ Dashboard"])
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
+    # https://github.com/harvimt/quamash/issues/123
+    if sys.version_info >= (3, 8):
+        asyncio.events._set_running_loop(loop)
     atexit.register(loop.close)
     smgr = state.StateManager(args.db_file)
 

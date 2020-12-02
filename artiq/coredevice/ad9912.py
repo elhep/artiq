@@ -1,5 +1,6 @@
 from numpy import int32, int64
 
+from artiq.language.types import TInt32, TInt64
 from artiq.language.core import kernel, delay, portable
 from artiq.language.units import ms, us, ns
 from artiq.coredevice.ad9912_reg import *
@@ -156,11 +157,11 @@ class AD9912:
         self.cpld.io_update.pulse(10*ns)
 
     @portable(flags={"fast-math"})
-    def frequency_to_ftw(self, frequency):
-        """Returns the frequency tuning word corresponding to the given
+    def frequency_to_ftw(self, frequency) -> TInt64:
+        """Returns the 48-bit frequency tuning word corresponding to the given
         frequency.
         """
-        return int64(round(self.ftw_per_hz*frequency))
+        return int64(round(self.ftw_per_hz*frequency)) & ((int64(1) << 48) - 1)
 
     @portable(flags={"fast-math"})
     def ftw_to_frequency(self, ftw):
@@ -170,11 +171,11 @@ class AD9912:
         return ftw/self.ftw_per_hz
 
     @portable(flags={"fast-math"})
-    def turns_to_pow(self, phase):
-        """Returns the phase offset word corresponding to the given
+    def turns_to_pow(self, phase) -> TInt32:
+        """Returns the 16-bit phase offset word corresponding to the given
         phase.
         """
-        return int32(round((1 << 14)*phase))
+        return int32(round((1 << 14)*phase)) & 0xffff
 
     @kernel
     def set(self, frequency, phase=0.0):

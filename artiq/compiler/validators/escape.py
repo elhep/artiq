@@ -99,7 +99,7 @@ class RegionOf(algorithm.Visitor):
     visit_BinOpT = visit_sometimes_allocating
 
     def visit_CallT(self, node):
-        if types.is_c_function(node.func.type, "cache_get"):
+        if types.is_external_function(node.func.type, "cache_get"):
             # The cache is borrow checked dynamically
             return Global()
         else:
@@ -156,7 +156,7 @@ class RegionOf(algorithm.Visitor):
     visit_NameConstantT = visit_immutable
     visit_NumT = visit_immutable
     visit_EllipsisT = visit_immutable
-    visit_UnaryOpT = visit_immutable
+    visit_UnaryOpT = visit_sometimes_allocating   # possibly array op
     visit_CompareT = visit_immutable
 
     # Value lives forever
