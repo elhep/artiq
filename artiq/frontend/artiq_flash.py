@@ -231,7 +231,7 @@ class ProgrammerScanstaXC7(Programmer):
         self._proxy = "bscan_spi_xc7k325t.bit"
 
         add_commands(self._board_script,
-                     "adapter_khz 4000",
+                     "adapter_khz 3000",
                      "source {}".format(self._transfer_script("interface/ftdi/digilent_jtag_hs3.cfg")),
                      "transport select jtag",
                      "source {}".format(self._transfer_script("cpld/xilinx-xc7.cfg")),
@@ -321,7 +321,7 @@ class ProgrammerAMCRTM(Programmer):
             # nTRST on ADBUS4: out, high, but R46 is DNP
             "ftdi_layout_init 0x0098 0x008b",
             "reset_config none",
-            "adapter_khz 5000",
+            "adapter_khz 6000",
             "transport select jtag",
             # tap 0, pld 0
             "source {}".format(self._transfer_script("cpld/xilinx-xc7.cfg")),

@@ -46,7 +46,7 @@ pub fn get_adresses() -> NetAddresses {
             #[cfg(soc_platform = "kc705")]
             { hardware_addr = EthernetAddress([0x02, 0x00, 0x00, 0x00, 0x00, 0x01]); }
             #[cfg(soc_platform = "afck1v1")]
-            { hardware_addr = EthernetAddress([0x02, 0x00, 0x00, 0x00, 0x00, 0x03]); }
+            { hardware_addr = EthernetAddress([0x02, 0x00, 0x00, 0x00, 0x00, 0x05]); }
         }
     }
 
@@ -63,7 +63,7 @@ pub fn get_adresses() -> NetAddresses {
             #[cfg(soc_platform = "kc705")]
             { ipv4_addr = IpAddress::v4(192, 168, 1, 50); }
             #[cfg(soc_platform = "afck1v1")]
-            { ipv4_addr = IpAddress::v4(192, 168, 95, 202); }
+            { ipv4_addr = IpAddress::v4(192, 168, 1, 203); }
         }
     }
 
