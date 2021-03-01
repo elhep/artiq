@@ -154,24 +154,33 @@ class StandaloneBase(MiniSoC, AMPSoC):
         AMPSoC.__init__(self)
         add_identifier(self)
 
-        i2c = self.platform.request("i2c")
-        self.submodules.i2c = gpio.GPIOTristate([i2c.scl, i2c.sda])
-        self.csr_devices.append("i2c")
-        self.config["I2C_BUS_COUNT"] = 1
-        self.config["no_flash_boot"] = 1
-
         self.rtio_channels = []
         self.rtio_channel_labels = []
+        
+        i2c = self.platform.request("i2c")
+        self.i2c_buses = [
+            [i2c.scl, i2c.sda, "afck_i2c"]
+        ]
+
         self.add_design()
-        self.print_rtio_channels()
+        self.print_design_info()
+        
+        scl_signal = Cat([bus[0] for bus in self.i2c_buses])
+        sda_signal = Cat([bus[1] for bus in self.i2c_buses])
+        self.submodules.i2c = gpio.GPIOTristate([scl_signal, sda_signal])
+        self.csr_devices.append("i2c")
 
+        self.config["I2C_BUS_COUNT"] = len(self.i2c_buses)
         self.config["RTIO_FREQUENCY"] = "125.0"
-
+        self.config["NO_FLASH_BOOT"] = None
         self.config["HAS_RTIO_LOG"] = None
         self.config["RTIO_LOG_CHANNEL"] = len(self.rtio_channels)
         self.rtio_channels.append(rtio.LogChannel())
 
         self.add_rtio(self.rtio_channels)
+        
+    def add_i2c_bus(self, scl, sda, name=None):
+        self.i2c_buses.append([scl, sda, name])
 
     def add_rtio_channels(self, channels, names):
         if not isinstance(channels, list):
@@ -184,14 +193,20 @@ class StandaloneBase(MiniSoC, AMPSoC):
     def add_design(self):
         pass
 
-    def print_rtio_channels(self):
+    def print_design_info(self):
         if len(self.rtio_channels) != len(self.rtio_channel_labels):
             raise RuntimeError("Missing RTIO channel label(s)")
-        with open("rtio_channels.txt", "w+") as f:
+        with open("design_info.txt", "w+") as f:
             print("RTIO channels:")
+            f.write("# RTIO channels\n")
             for ch, label in enumerate(self.rtio_channel_labels):
                 print(" - {:3d} : {}".format(ch, label))
-                f.write("{:3d} : {}".format(ch, label))       
+                f.write("* {:3d} : {}".format(ch, label))
+            print("I2C buses:")
+            f.write("\n#I2C buses\n")
+            for bus_idx, bus in enumerate(self.i2c_buses):
+                print(" - {} : {}".format(bus_idx, bus[2]))      
+                f.write(" * {} : {}".format(bus_idx, bus[2]))      
 
     def add_rtio(self, rtio_channels):
         fix_serdes_timing_path(self.platform)
