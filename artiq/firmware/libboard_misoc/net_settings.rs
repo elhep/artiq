@@ -63,7 +63,7 @@ pub fn get_adresses() -> NetAddresses {
             #[cfg(soc_platform = "kc705")]
             { ipv4_addr = IpAddress::v4(192, 168, 1, 50); }
             #[cfg(soc_platform = "afck1v1")]
-            { ipv4_addr = IpAddress::v4(192, 168, 95, 203); }
+            { ipv4_addr = IpAddress::v4(192, 168, 1, 20); }
         }
     }
 
