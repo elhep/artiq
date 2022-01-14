@@ -212,7 +212,7 @@ class Programmer:
 
 
 class ProgrammerScanstaXC7(Programmer):
-    _sector_size = 0x40000
+    _sector_size = 0x10000
 
     import textwrap
     scansta_switch = textwrap.dedent("""\
@@ -411,9 +411,9 @@ def main():
         "afck1v1": {
             "programmer": ProgrammerScanstaXC7,
             "gateware":   ("spi0", 0x000000),
-            "bootloader": ("spi0", 0x800000),
-            "storage":    ("spi0", 0x840000),
-            "firmware":   ("spi0", 0x880000),
+            "bootloader": ("spi0", 0xaf0000),
+            "storage":    ("spi0", 0xb30000),
+            "firmware":   ("spi0", 0xb40000),
         }
     }[args.target]
 
