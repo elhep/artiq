@@ -53,7 +53,7 @@ def add_identifier(soc, *args, gateware_identifier_str=None, **kwargs):
     soc.config["IDENTIFIER_STR"] = identifier_str
 
 
-def build_artiq_soc(soc, argdict):
+def build_artiq_soc(soc, argdict, **kwargs):
     firmware_dir = os.path.join(artiq_dir, "firmware")
     builder = Builder(soc, **argdict)
     builder.software_packages = []
@@ -74,6 +74,6 @@ def build_artiq_soc(soc, argdict):
         # Assume DRTIO satellite.
         builder.add_software_package("satman", os.path.join(firmware_dir, "satman"))
     try:
-        builder.build()
+        builder.build(**kwargs)
     except subprocess.CalledProcessError as e:
         raise SystemExit("Command {} failed".format(" ".join(e.cmd)))
