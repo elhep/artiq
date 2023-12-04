@@ -521,3 +521,48 @@ class TTLClockGen:
     def stop(self):
         """Stop the toggling of the clock and set the output level to 0."""
         self.set_mu(0)
+
+
+class TTLHWPulse:
+    """RTIO hardware TTL pulse generator driver.
+
+    This should be used with TTL channels that have a hardware pulse generator
+    built into the gateware (not compatible with regular TTL channels).
+
+    The time cursor is not modified by any function in this class.
+
+    :param channel: channel number
+    :param cnt_width: pulse counter width in bits
+    """
+
+    kernel_invariants = {"core", "channel", "target", "cnt_width"}
+
+    def __init__(self, dmgr, channel, cnt_width=16, core_device="core"):
+        self.core = dmgr.get(core_device)
+        self.channel = channel
+        self.target = channel << 8
+
+        self.cnt_width = numpy.int64(cnt_width)
+
+    @portable
+    def duration_to_mu(self, duration):
+        """Returns the duration in machine units corresponding to the given 
+        duration in seconds."""
+        return round(duration/self.core.coarse_ref_period)
+
+    @kernel
+    def pulse_mu(self, duration_mu):
+        """Pulse the output high for the specified duration.
+        
+        Note that this is hardware limited to 37000 RTIO clock cycles, that
+        corresponds to a maximum duration of 37000 * 8 ns = 296 us.
+        """
+        rtio_output(self.target, duration_mu)
+
+    @kernel
+    def pulse(self, duration):
+        """Pulse the output high for the specified duration in seconds.
+        
+        Note that this is hardware limited to 296 us.
+        """
+        self.pulse_mu(self.duration_to_mu(duration))

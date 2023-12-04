@@ -133,7 +133,8 @@ class PeripheralManager:
         class_names = {
             "input": "TTLInOut",
             "output": "TTLOut",
-            "clkgen": "TTLClockGen"
+            "clkgen": "TTLClockGen",
+            "hwpulse": "TTLHWPulse"
         }
         classes = [
             class_names[peripheral["bank_direction_low"]],

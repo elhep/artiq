@@ -182,7 +182,7 @@
                         },
                         "bank_direction_low": {
                             "type": "string",
-                            "enum": ["input", "output", "clkgen"]
+                            "enum": ["input", "output", "clkgen", "hwpulse"]
                         },
                         "bank_direction_high": {
                             "type": "string",
