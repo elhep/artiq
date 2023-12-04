@@ -172,3 +172,26 @@ class ClockGen(Module):
             ),
             pad_o.eq(acc[-1])
         ]
+
+
+class HWPulseGen(Module):
+    def __init__(self, pad, pad_n=None, cnt_width=16, cnt_max=37_000, dci=False):
+        self.rtlink = rtlink.Interface(rtlink.OInterface(cnt_width))
+
+        # # #
+
+        pad_o = Signal()
+        if pad_n is None:
+            self.comb += pad.eq(pad_o)
+        else:
+            self.specials += DifferentialOutput(pad_o, pad, pad_n)
+        cnt = Signal(cnt_width)
+        self.sync.rio_phy += [
+            pad_o.eq(0),
+            If(cnt == 0,
+               If(self.rtlink.o.stb, If(self.rtlink.o.data < cnt_max, cnt.eq(self.rtlink.o.data)).Else(cnt.eq(cnt_max))))
+            .Else(
+                pad_o.eq(1),
+                cnt.eq(cnt - 1)
+            )
+        ]
