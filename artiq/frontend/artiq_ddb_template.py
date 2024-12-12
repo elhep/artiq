@@ -4,7 +4,7 @@ import argparse
 import sys
 import textwrap
 from collections import defaultdict
-from itertools import count, filterfalse
+from itertools import count, filterfalse, product
 
 from artiq import __version__ as artiq_version
 from artiq.coredevice import jsondesc
@@ -735,6 +735,58 @@ class PeripheralManager:
                 dev_class=device_name,
                 spi=spi_name)
         return 0
+    
+    def process_pmtsim(self, rtio_offset, peripheral):
+        name = self.get_name("pmtsim")
+        self.gen("""
+            device_db["spi_{name}"] = {{
+                "type": "local",
+                "module": "artiq.coredevice.spi2",
+                "class": "SPIMaster",
+                "arguments": {{"channel": 0x{spi_channel:06x}}}
+            }}""",
+            name=name,
+            spi_channel=rtio_offset)
+        
+        self.gen("""
+            device_db["dac_{name}"] = {{
+                "type": "local",
+                "module": "artiq.coredevice.fit",
+                "class": "PmtSimDac",
+                "arguments": {{"spi_device": "spi_{name}"}}
+            }}""",
+            name=name)
+
+        for ch, hit in product(range(6), range(2)):
+            self.gen("""
+                device_db["ttl_{name}_ch{ch}_hit{hit}"] = {{
+                    "type": "local",
+                    "module": "artiq.coredevice.ttl",
+                    "class": "TTLOut",
+                    "arguments": {{"channel": 0x{channel:06x}}}
+                }}""",
+                name=name,
+                hit=hit,
+                ch=ch,
+                channel=rtio_offset + 1 + 2*ch + hit)
+        
+        for ch in range(6):
+            self.gen("""
+                device_db["{name}_ch{ch}"] = {{
+                    "type": "local",
+                    "module": "artiq.coredevice.fit",
+                    "class": "PmtSimChannel",
+                    "arguments": {{
+                        "dac": "dac_{name}",
+                        "dac_ch": [{dac_hit0}, {dac_hit1}],
+                        "ttl": ["ttl_{name}_ch{ch}_hit0", "ttl_{name}_ch{ch}_hit1"]
+                    }}
+                }}""",
+                name=name,
+                ch=ch,
+                dac_hit0=ch*2 + 0,
+                dac_hit1=ch*2 + 1)
+        return 1 + 2 * 6
 
     def process(self, rtio_offset, peripheral):
         processor = getattr(self, "process_"+str(peripheral["type"]))

@@ -146,7 +146,8 @@
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler"]
+                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler",
+                        "pmtsim"]
                 },
                 "board": {
                     "type": "string"
@@ -638,6 +639,28 @@
                         "hw_rev": {
                             "type": "string",
                             "enum": ["v1.0", "v1.1"]
+                        }
+                    },
+                    "required": ["ports"]
+                }
+            },{
+                "title": "FIT PMTSim",
+                "if": {
+                    "properties": {
+                        "type": {
+                            "const": "pmtsim"
+                        }
+                    }
+                },
+                "then": {
+                    "properties": {
+                        "ports": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2
                         }
                     },
                     "required": ["ports"]

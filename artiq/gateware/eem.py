@@ -1,3 +1,5 @@
+from itertools import product
+
 from migen import *
 from migen.build.generic_platform import *
 from migen.genlib.io import DifferentialOutput
@@ -744,7 +746,7 @@ class Phaser(_EEM):
 
 class HVAmp(_EEM):
     @staticmethod
-    def io(eem, iostandard):
+    def io(eem, eem_aux, iostandard):
         return [
             ("hvamp{}_out_en".format(eem), i,
                     Subsignal("p", Pins(_eem_pin(eem, i, "p"))),
@@ -794,3 +796,59 @@ class Shuttler(_EEM):
     def add_std(cls, target, eem, eem_aux, iostandard=default_iostandard):
         cls.add_extension(target, eem, is_drtio_over_eem=True, iostandard=iostandard)
         target.eem_drtio_channels.append((target.platform.request("shuttler{}_drtio_rx".format(eem), 0), target.platform.request("shuttler{}_drtio_tx".format(eem), 0)))
+
+
+class PmtSimulator(_EEM):
+    @staticmethod
+    def io(eem, eem_aux, iostandard):
+        _io = [
+            ("pmtsim{}_spi_p".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "p"))),
+                Subsignal("mosi", Pins(_eem_pin(eem, 1, "p"))),
+                Subsignal("miso", Pins(_eem_pin(eem, 2, "p"))),
+                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "p"))),
+                iostandard(eem),
+            ),
+            ("pmtsim{}_spi_n".format(eem), 0,
+                Subsignal("clk", Pins(_eem_pin(eem, 0, "n"))),
+                Subsignal("mosi", Pins(_eem_pin(eem, 1, "n"))),
+                Subsignal("miso", Pins(_eem_pin(eem, 2, "n"))),
+                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "n"))),
+                iostandard(eem),
+            ),
+        ]
+        for ch in range(2):
+            for hit in range(2):
+                _io.append(
+                    ("pmtsim{}_ch{}_hit{}".format(eem, ch, hit), 0,
+                        Subsignal("p", Pins(_eem_pin(eem, (ch*2+hit+4), "p"))),
+                        Subsignal("n", Pins(_eem_pin(eem, (ch*2+hit+4), "n"))),
+                        iostandard(eem)
+                    )
+                )
+        for ch in range(4):
+            for hit in range(2):
+                _io.append(
+                    ("pmtsim{}_ch{}_hit{}".format(eem, ch+2, hit), 0,
+                        Subsignal("p", Pins(_eem_pin(eem_aux, (ch*2+hit), "p"))),
+                        Subsignal("n", Pins(_eem_pin(eem_aux, (ch*2+hit), "n"))),
+                        iostandard(eem_aux)
+                    )
+                )
+        return _io
+
+    @classmethod
+    def add_std(cls, target, eem, eem_aux, ttl_out_cls, iostandard=default_iostandard):
+        cls.add_extension(target, eem, eem_aux, iostandard=iostandard)
+
+        spi_phy = spi2.SPIMaster(target.platform.request("pmtsim{}_spi_p".format(eem)),
+            target.platform.request("pmtsim{}_spi_n".format(eem)))
+        target.submodules += spi_phy
+        target.rtio_channels.append(rtio.Channel.from_phy(spi_phy, ififo_depth=4))
+
+        for ch in range(6):
+            for hit in range(2):
+                pads = target.platform.request("pmtsim{}_ch{}_hit{}".format(eem, ch, hit))
+                phy = ttl_out_cls(pads.p, pads.n)
+                target.submodules += phy
+                target.rtio_channels.append(rtio.Channel.from_phy(phy))

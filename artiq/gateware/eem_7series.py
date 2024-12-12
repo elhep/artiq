@@ -143,6 +143,12 @@ def peripheral_shuttler(module, peripheral, **kwargs):
         raise ValueError("wrong number of ports")
     eem.Shuttler.add_std(module, port, port_aux, **kwargs)
 
+def peripheral_pmtsim(module, peripheral, **kwargs):
+    if len(peripheral["ports"]) != 2:
+        raise ValueError("wrong number of ports")
+    eem.PmtSimulator.add_std(module, peripheral["ports"][0], peripheral["ports"][1],
+        ttl_serdes_7series.Output_8X, **kwargs)
+
 peripheral_processors = {
     "dio": peripheral_dio,
     "dio_spi": peripheral_dio_spi,
@@ -157,6 +163,7 @@ peripheral_processors = {
     "phaser": peripheral_phaser,
     "hvamp": peripheral_hvamp,
     "shuttler": peripheral_shuttler,
+    "pmtsim": peripheral_pmtsim
 }
 
 
