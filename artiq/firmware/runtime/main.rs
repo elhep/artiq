@@ -50,6 +50,7 @@ use board_artiq::si549;
 use board_artiq::drtio_eem;
 #[cfg(has_rtio_analyzer)]
 use proto_artiq::analyzer_proto;
+use board_misoc::sfp;
 
 use riscv::register::{mcause, mepc, mtval};
 use smoltcp::iface::Routes;
@@ -81,6 +82,19 @@ fn grabber_thread(io: sched::Io) {
         io.sleep(200).unwrap();
     }
 }
+
+fn sfp_debug_thread(io: sched::Io) {
+    let mut sfp0;
+    sfp0 = sfp::SFP::new(0);
+    let mut sfp_buffer = [0u8; 1];
+    loop {
+        sfp0.read(12, &mut sfp_buffer);
+        info!("SFP: {}", sfp_buffer[0]);
+        io.sleep(1000).unwrap();
+    }
+}
+
+
 
 fn setup_log_levels() {
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
@@ -235,6 +249,8 @@ fn startup() {
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
+
+    io.spawn(8192, sfp_debug_thread);
 
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
