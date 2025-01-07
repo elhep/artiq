@@ -3,7 +3,7 @@ use i2c;
 pub struct SFP {
     busno: u8,
     port: u8,
-    address: u8,
+    address: u8,    
 }
 
 impl SFP {
@@ -23,7 +23,7 @@ impl SFP {
         Ok(())
     }
 
-    pub fn read<'a>(&self, addr: u8, buf: &'a mut [u8]) -> Result<(), &'static str> {
+    fn read<'a>(&self, addr: u8, buf: &'a mut [u8]) -> Result<(), &'static str> {
         self.select()?;
 
         i2c::start(self.busno)?;
@@ -61,5 +61,15 @@ impl SFP {
         Ok(())
     }
 
-    // pub fn dump_all(&self, buf: &'a mut)
+    pub fn dump_data(&self) -> [u8; 256] {
+        let mut sfp_data = [0u8; 256];
+        self.read(0, &mut sfp_data);
+        sfp_data
+    }
+
+    pub fn dump_diag(&self) -> [u8; 256] {
+        let mut sfp_data = [0u8; 256];
+        self.read_diag(0, &mut sfp_data);
+        sfp_data
+    }
 }
