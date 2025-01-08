@@ -50,7 +50,6 @@ use board_artiq::si549;
 use board_artiq::drtio_eem;
 #[cfg(has_rtio_analyzer)]
 use proto_artiq::analyzer_proto;
-use board_misoc::sfp;
 
 use riscv::register::{mcause, mepc, mtval};
 use smoltcp::iface::Routes;
@@ -84,21 +83,11 @@ fn grabber_thread(io: sched::Io) {
 }
 
 fn sfp_debug_thread(io: sched::Io) {
-    let mut sfp0;
-    let mut sfp_data;
-    let mut sfp_diag;
-    sfp0 = sfp::SFP::new(0);
+    let sfp0;
+    sfp0 = board_misoc::sfp::SFP::new(0);
     loop {
-        
-        sfp_data = sfp0.dump_data();
-        sfp_diag = sfp0.dump_diag();
-        
-        for i in 0..255 {
-            info!("SFP {}: {}", i, sfp_data[i as usize]);
-        }
-        for i in 0..255 {
-            info!("SFP diag {}: {}", i, sfp_diag[i as usize]);
-        }
+        sfp0.dump_data();
+        sfp0.dump_diag();
         io.sleep(1000).unwrap();
     }
 }

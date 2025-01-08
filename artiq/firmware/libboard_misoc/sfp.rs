@@ -64,12 +64,20 @@ impl SFP {
     pub fn dump_data(&self) -> [u8; 256] {
         let mut sfp_data = [0u8; 256];
         self.read(0, &mut sfp_data);
+        #[cfg(feature = "log")]
+        for i in 0..255 {
+            log::info!("SFP diag {}: {}", i, sfp_data[i as usize]);
+        }
         sfp_data
     }
 
     pub fn dump_diag(&self) -> [u8; 256] {
         let mut sfp_data = [0u8; 256];
         self.read_diag(0, &mut sfp_data);
+        #[cfg(feature = "log")]
+        for i in 0..255 {
+            log::info!("SFP diag {}: {}", i, sfp_data[i as usize]);
+        }
         sfp_data
     }
 }
