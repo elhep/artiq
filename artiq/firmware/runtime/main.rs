@@ -83,11 +83,12 @@ fn grabber_thread(io: sched::Io) {
 }
 
 fn sfp_debug_thread(io: sched::Io) {
-    let sfp0;
+    let mut sfp0;
     sfp0 = board_misoc::sfp::SFP::new(0);
     loop {
         sfp0.dump_data();
         sfp0.dump_diag();
+        sfp0.print_all();
         io.sleep(1000).unwrap();
     }
 }
@@ -245,10 +246,17 @@ fn startup() {
         io.spawn(8192, move |io| { analyzer::thread(io, &aux_mutex, &ddma_mutex, &subkernel_mutex, &drtio_routing_table, &up_destinations) });
     }
 
+    let mut sfp0;
+    sfp0 = board_misoc::sfp::SFP::new(0);
+    sfp0.dump_data();
+    sfp0.dump_diag();
+    sfp0.print_all();
+    sfp0.print_some();
+
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
 
-    io.spawn(8192, sfp_debug_thread);
+    // io.spawn(8192, sfp_debug_thread);
 
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
