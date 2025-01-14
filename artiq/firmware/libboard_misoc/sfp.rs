@@ -11,14 +11,18 @@ pub struct SFP {
 
 impl SFP {
     #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
-    pub fn new(index: u8) -> Self {
-        SFP {
+    pub fn new(index: u8) -> Result<Self, &'static str> {
+        let sfp = SFP {
             busno: 0,
             port: 8+index,
             address: 0xa0,
             sfp_data: [0u8; 256],
             sfp_diag: [0u8; 256],
-        }
+        };
+        if !sfp.check_ack()? {
+            return Err("SFP module not found.");
+        };
+        Ok(sfp)
     }
 
     fn select(&self) -> Result<(), &'static str> {
@@ -78,6 +82,15 @@ impl SFP {
         self.read_diag(0, &mut sfp_data);
         self.sfp_diag = sfp_data;
         sfp_data
+    }
+
+    fn check_ack(&self) -> Result<bool, &'static str> {
+        // Check for ack from the SFP module
+        self.select()?;
+        i2c::start(self.busno)?;
+        let ack = i2c::write(self.busno, self.address)?;
+        i2c::stop(self.busno)?;
+        Ok(ack)
     }
 
     #[cfg(feature = "log")]

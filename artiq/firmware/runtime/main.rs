@@ -29,6 +29,7 @@ extern crate riscv;
 extern crate tar_no_std;
 
 use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::convert::TryFrom;
 use smoltcp::wire::HardwareAddress;
@@ -85,12 +86,12 @@ fn grabber_thread(io: sched::Io) {
 fn sfp_debug_thread(io: sched::Io) {
     let mut sfp0;
     sfp0 = board_misoc::sfp::SFP::new(0);
-    loop {
-        sfp0.dump_data();
-        sfp0.dump_diag();
-        sfp0.print_all();
-        io.sleep(1000).unwrap();
-    }
+    // loop {
+    //     sfp0.dump_data();
+    //     sfp0.dump_diag();
+    //     sfp0.print_all();
+    //     io.sleep(1000).unwrap();
+    // }
 }
 
 
@@ -246,12 +247,22 @@ fn startup() {
         io.spawn(8192, move |io| { analyzer::thread(io, &aux_mutex, &ddma_mutex, &subkernel_mutex, &drtio_routing_table, &up_destinations) });
     }
 
-    let mut sfp0;
-    sfp0 = board_misoc::sfp::SFP::new(0);
-    sfp0.dump_data();
-    sfp0.dump_diag();
-    sfp0.print_all();
-    sfp0.print_some();
+    let mut sfp = Vec::new();
+    for i in 0..3 {
+        let sfp_try = board_misoc::sfp::SFP::new(i);
+        if sfp_try.is_ok() {
+            sfp.push(sfp_try.unwrap());
+            info!("Found SFP{}", i);
+        } else {
+            debug!("SFP{} not found", i);
+        }
+    }
+    for sfp_n in sfp.iter_mut() {
+        sfp_n.dump_data();
+        sfp_n.dump_diag();
+        sfp_n.print_all();
+        sfp_n.print_some();
+    }
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
