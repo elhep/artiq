@@ -248,18 +248,16 @@ fn startup() {
     }
 
     let mut sfp = Vec::new();
-    for i in 0..3 {
+    for i in 0..4 {
         let sfp_try = board_misoc::sfp::SFP::new(i);
         if sfp_try.is_ok() {
             sfp.push(sfp_try.unwrap());
-            info!("Found SFP{}", i);
+            info!("Detected SFP{}", i);
         } else {
-            debug!("SFP{} not found", i);
+            debug!("SFP{} module not detected", i);
         }
     }
     for sfp_n in sfp.iter_mut() {
-        sfp_n.dump_data();
-        sfp_n.dump_diag();
         sfp_n.print_all();
         sfp_n.print_some();
     }

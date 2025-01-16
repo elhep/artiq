@@ -12,7 +12,7 @@ pub struct SFP {
 impl SFP {
     #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
     pub fn new(index: u8) -> Result<Self, &'static str> {
-        let sfp = SFP {
+        let mut sfp = SFP {
             busno: 0,
             port: 8+index,
             address: 0xa0,
@@ -22,6 +22,12 @@ impl SFP {
         if !sfp.check_ack()? {
             return Err("SFP module not found.");
         };
+        // Initialize with module data
+        sfp.dump_data();
+        // If diagnostic data is implemented on SFP and doesn't require an address change
+        if ((sfp.sfp_data[92]>>2) & 1) == 0 && ((sfp.sfp_data[92]>>6) & 1) == 1 {
+            sfp.dump_diag();
+        }
         Ok(sfp)
     }
 
@@ -84,6 +90,13 @@ impl SFP {
         sfp_data
     }
 
+    pub fn read_diagnostic_data(&mut self) -> [u8; 22] {
+        let mut sfp_data = [0u8; 22];
+        self.read_diag(96, &mut sfp_data);
+        self.sfp_diag[96..118].clone_from_slice(&sfp_data);
+        sfp_data
+    }
+
     fn check_ack(&self) -> Result<bool, &'static str> {
         // Check for ack from the SFP module
         self.select()?;
@@ -139,81 +152,88 @@ impl SFP {
         log::debug!("Loss of signal implented: {}", (self.sfp_data[65]>>1)&1);
         log::debug!("Link margin: min {}%, max {}% ", self.sfp_data[67], self.sfp_data[66]);
         log::debug!("Diagnostic monitoring signals: {:#08b}", self.sfp_data[92]);
-        if ((self.sfp_data[92]>>4) & 1) != 0 {
-            log::warn!("SFP{}: External calibration conversion is not implemented!", self.port-8)
+        if ((self.sfp_data[92]>>4) & 1) == 1 {
+            log::warn!("SFP{}: External calibration conversion is not implemented, shown values won't be correct!", self.port-8)
+        }
+        if ((self.sfp_data[92]>>2) & 1) == 1 {
+            log::warn!("SFP{}: Address change for diagnostic monitoring is not implemented!", self.port-8)
         }
         log::debug!("Enhanced options: {:#08b}", self.sfp_data[93]);
         log::debug!("SFF-8472 compliance: {:#x}", self.sfp_data[94]);
 
-        log::debug!("Diagnostics:");
-        log::debug!("\t\tTemp [°C]\tVcc [V]\tTX bias [mA]\tTX power [mW]\tRX power [mW]");
-        log::debug!("+ Alarm: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
-                    temperature_convert(&self.sfp_diag[0..2]), 
-                    voltage_convert(&self.sfp_diag[8..10]),
-                    current_convert(&self.sfp_diag[16..18]),
-                    power_convert(&self.sfp_diag[24..26]),
-                    power_convert(&self.sfp_diag[32..34]),
-                );
-        log::debug!("+ Warning: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
-                    temperature_convert(&self.sfp_diag[4..6]), 
-                    voltage_convert(&self.sfp_diag[12..14]),
-                    current_convert(&self.sfp_diag[20..22]),
-                    power_convert(&self.sfp_diag[28..30]),
-                    power_convert(&self.sfp_diag[36..38]),
-                );
-        log::debug!("Value: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
-                    temperature_convert(&self.sfp_diag[96..98]),
-                    voltage_convert(&self.sfp_diag[98..100]),
-                    current_convert(&self.sfp_diag[100..102]),
-                    power_convert(&self.sfp_diag[102..104]),
-                    power_convert(&self.sfp_diag[104..106]),
-                );
-        log::debug!("- Warning: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
-                    temperature_convert(&self.sfp_diag[6..8]), 
-                    voltage_convert(&self.sfp_diag[14..16]),
-                    current_convert(&self.sfp_diag[22..24]),
-                    power_convert(&self.sfp_diag[30..32]),
-                    power_convert(&self.sfp_diag[38..40]),
-                );
-        log::debug!("- Alarm: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
-                    temperature_convert(&self.sfp_diag[2..4]), 
-                    voltage_convert(&self.sfp_diag[10..12]),
-                    current_convert(&self.sfp_diag[18..20]),
-                    power_convert(&self.sfp_diag[26..28]),
-                    power_convert(&self.sfp_diag[34..36]),
-                );
+        if ((self.sfp_data[92]>>2) & 1) == 0 && ((self.sfp_data[92]>>6) & 1) == 1 {
+            log::debug!("Diagnostics:");
+            log::debug!("\t\tTemp [°C]\tVcc [V]\tTX bias [mA]\tTX power [mW]\tRX power [mW]");
+            log::debug!("+ Alarm: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
+                        temperature_convert(&self.sfp_diag[0..2]), 
+                        voltage_convert(&self.sfp_diag[8..10]),
+                        current_convert(&self.sfp_diag[16..18]),
+                        power_convert(&self.sfp_diag[24..26]),
+                        power_convert(&self.sfp_diag[32..34]),
+                    );
+            log::debug!("+ Warning: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
+                        temperature_convert(&self.sfp_diag[4..6]), 
+                        voltage_convert(&self.sfp_diag[12..14]),
+                        current_convert(&self.sfp_diag[20..22]),
+                        power_convert(&self.sfp_diag[28..30]),
+                        power_convert(&self.sfp_diag[36..38]),
+                    );
+            log::debug!("Value: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
+                        temperature_convert(&self.sfp_diag[96..98]),
+                        voltage_convert(&self.sfp_diag[98..100]),
+                        current_convert(&self.sfp_diag[100..102]),
+                        power_convert(&self.sfp_diag[102..104]),
+                        power_convert(&self.sfp_diag[104..106]),
+                    );
+            log::debug!("- Warning: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
+                        temperature_convert(&self.sfp_diag[6..8]), 
+                        voltage_convert(&self.sfp_diag[14..16]),
+                        current_convert(&self.sfp_diag[22..24]),
+                        power_convert(&self.sfp_diag[30..32]),
+                        power_convert(&self.sfp_diag[38..40]),
+                    );
+            log::debug!("- Alarm: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
+                        temperature_convert(&self.sfp_diag[2..4]), 
+                        voltage_convert(&self.sfp_diag[10..12]),
+                        current_convert(&self.sfp_diag[18..20]),
+                        power_convert(&self.sfp_diag[26..28]),
+                        power_convert(&self.sfp_diag[34..36]),
+                    );
 
-        log::debug!("Status/Control Bits: {:#08b}", self.sfp_diag[110]);
-        log::debug!("TX disable: {}", (self.sfp_diag[110] >> 7) & 1);
-        log::debug!("Soft TX disable: {}", (self.sfp_diag[110] >> 6) & 1);
-        log::debug!("Rate Select 1: {}", (self.sfp_diag[110] >> 5) & 1);
-        log::debug!("Rate Select 0: {}", (self.sfp_diag[110] >> 4) & 1);
-        log::debug!("Soft Rate Select 0: {}", (self.sfp_diag[110] >> 3) & 1);
-        log::debug!("TX Fault: {}", (self.sfp_diag[110] >> 2) & 1);
-        log::debug!("RX_LOS: {}", (self.sfp_diag[110] >> 1) & 1);
-        log::debug!("Data not ready: {}", self.sfp_diag[110] & 1);
+            log::debug!("Status/Control Bits: {:#08b}", self.sfp_diag[110]);
+            log::debug!("TX disable: {}", (self.sfp_diag[110] >> 7) & 1);
+            log::debug!("Soft TX disable: {}", (self.sfp_diag[110] >> 6) & 1);
+            log::debug!("Rate Select 1: {}", (self.sfp_diag[110] >> 5) & 1);
+            log::debug!("Rate Select 0: {}", (self.sfp_diag[110] >> 4) & 1);
+            log::debug!("Soft Rate Select 0: {}", (self.sfp_diag[110] >> 3) & 1);
+            log::debug!("TX Fault: {}", (self.sfp_diag[110] >> 2) & 1);
+            log::debug!("RX_LOS: {}", (self.sfp_diag[110] >> 1) & 1);
+            log::debug!("Data not ready: {}", self.sfp_diag[110] & 1);
 
-        log::debug!("Temperature high alarm: {}", (self.sfp_diag[112] >> 7) & 1);
-        log::debug!("Temperature low alarm: {}", (self.sfp_diag[112] >> 6) & 1);
-        log::debug!("Vcc high alarm: {}", (self.sfp_diag[112] >> 5) & 1);
-        log::debug!("Vcc low alarm: {}", (self.sfp_diag[112] >> 4) & 1);
-        log::debug!("TX Bias high alarm: {}", (self.sfp_diag[112] >> 3) & 1);
-        log::debug!("TX Bias low alarm: {}", (self.sfp_diag[112] >> 2) & 1);
-        log::debug!("TX power high alarm: {}", (self.sfp_diag[112] >> 1) & 1);
-        log::debug!("TX power low alarm: {}", self.sfp_diag[112] & 1);
-        log::debug!("RX power high alarm: {}", (self.sfp_diag[113] >> 7) & 1);
-        log::debug!("RX power low alarm: {}", (self.sfp_diag[113] >> 6) & 1);
+            log::debug!("Temperature high alarm: {}", (self.sfp_diag[112] >> 7) & 1);
+            log::debug!("Temperature low alarm: {}", (self.sfp_diag[112] >> 6) & 1);
+            log::debug!("Vcc high alarm: {}", (self.sfp_diag[112] >> 5) & 1);
+            log::debug!("Vcc low alarm: {}", (self.sfp_diag[112] >> 4) & 1);
+            log::debug!("TX Bias high alarm: {}", (self.sfp_diag[112] >> 3) & 1);
+            log::debug!("TX Bias low alarm: {}", (self.sfp_diag[112] >> 2) & 1);
+            log::debug!("TX power high alarm: {}", (self.sfp_diag[112] >> 1) & 1);
+            log::debug!("TX power low alarm: {}", self.sfp_diag[112] & 1);
+            log::debug!("RX power high alarm: {}", (self.sfp_diag[113] >> 7) & 1);
+            log::debug!("RX power low alarm: {}", (self.sfp_diag[113] >> 6) & 1);
 
-        log::debug!("Temperature high warning: {}", (self.sfp_diag[116] >> 7) & 1);
-        log::debug!("Temperature low warning: {}", (self.sfp_diag[116] >> 6) & 1);
-        log::debug!("Vcc high warning: {}", (self.sfp_diag[116] >> 5) & 1);
-        log::debug!("Vcc low warning: {}", (self.sfp_diag[116] >> 4) & 1);
-        log::debug!("TX Bias high warning: {}", (self.sfp_diag[116] >> 3) & 1);
-        log::debug!("TX Bias low warning: {}", (self.sfp_diag[116] >> 2) & 1);
-        log::debug!("TX power high warning: {}", (self.sfp_diag[116] >> 1) & 1);
-        log::debug!("TX power low warning: {}", self.sfp_diag[116] & 1);
-        log::debug!("RX power high warning: {}", (self.sfp_diag[117] >> 7) & 1);
-        log::debug!("RX power low warning: {}", (self.sfp_diag[117] >> 6) & 1);
+            log::debug!("Temperature high warning: {}", (self.sfp_diag[116] >> 7) & 1);
+            log::debug!("Temperature low warning: {}", (self.sfp_diag[116] >> 6) & 1);
+            log::debug!("Vcc high warning: {}", (self.sfp_diag[116] >> 5) & 1);
+            log::debug!("Vcc low warning: {}", (self.sfp_diag[116] >> 4) & 1);
+            log::debug!("TX Bias high warning: {}", (self.sfp_diag[116] >> 3) & 1);
+            log::debug!("TX Bias low warning: {}", (self.sfp_diag[116] >> 2) & 1);
+            log::debug!("TX power high warning: {}", (self.sfp_diag[116] >> 1) & 1);
+            log::debug!("TX power low warning: {}", self.sfp_diag[116] & 1);
+            log::debug!("RX power high warning: {}", (self.sfp_diag[117] >> 7) & 1);
+            log::debug!("RX power low warning: {}", (self.sfp_diag[117] >> 6) & 1);
+        } else {
+        log::debug!("Diagnostic monitoring is not implemented on the module.");
+        }
     }
 }
 
