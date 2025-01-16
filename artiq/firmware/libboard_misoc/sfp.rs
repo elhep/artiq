@@ -25,7 +25,7 @@ impl SFP {
         // Initialize with module data
         sfp.dump_data();
         // If diagnostic data is implemented on SFP and doesn't require an address change
-        if ((sfp.sfp_data[92]>>2) & 1) == 0 && ((sfp.sfp_data[92]>>6) & 1) == 1 {
+        if ((sfp.sfp_data[92]>>2) & 1) == 0 && (((sfp.sfp_data[92]>>6) & 1) == 1 || sfp.sfp_data[94] != 0) {
             sfp.dump_diag();
         }
         Ok(sfp)
@@ -92,12 +92,30 @@ impl SFP {
 
     pub fn read_diagnostic_data(&mut self) -> [u8; 22] {
         let mut sfp_data = [0u8; 22];
-        self.read_diag(96, &mut sfp_data);
-        self.sfp_diag[96..118].clone_from_slice(&sfp_data);
+        if ((self.sfp_data[92]>>2) & 1) == 0 && (((self.sfp_data[92]>>6) & 1) == 1 || self.sfp_data[94] != 0) {
+            self.read_diag(96, &mut sfp_data);
+            self.sfp_diag[96..118].clone_from_slice(&sfp_data);
+        }
         sfp_data
     }
 
-    fn check_ack(&self) -> Result<bool, &'static str> {
+    #[cfg(feature = "log")]
+    pub fn print_alarms(&self) {
+        let alarm = ["Temperature high", "Temperature low", "Vcc high", "Vcc low", "TX Bias high", "TX Bias low", "TX Power high", "TX Power low", "RX Power high", "RX Power low"];
+        // if ((self.sfp_data[93] >> 7) & 1) == 1 {
+            for i in 0..10 {
+                let register = i/8;
+                let bit = 7 - i % 8;
+                if (self.sfp_diag[112 + register] >> bit) & 1 == 1 {
+                    log::error!("SFP{}: {} alarm.", self.port-8, alarm[i]);
+                } else if (self.sfp_diag[116 + register] >> bit) & 1 == 1 {
+                    log::warn!("SFP{}: {} warning.", self.port-8, alarm[i]);
+                }
+            }
+        // }
+    }
+
+    pub fn check_ack(&self) -> Result<bool, &'static str> {
         // Check for ack from the SFP module
         self.select()?;
         i2c::start(self.busno)?;
@@ -109,10 +127,10 @@ impl SFP {
     #[cfg(feature = "log")]
     pub fn print_all(&self) {
         for i in 0..255 {
-            log::trace!("SFP data {}: {}", i, self.sfp_data[i as usize]);
+            log::trace!("SFP{} data {}: {}", self.port-8, i, self.sfp_data[i as usize]);
         }
         for i in 0..255 {
-            log::trace!("SFP diag {}: {}", i, self.sfp_diag[i as usize]);
+            log::trace!("SFP{} diag {}: {}", self.port-8, i, self.sfp_diag[i as usize]);
         }
     }
 
@@ -161,7 +179,7 @@ impl SFP {
         log::debug!("Enhanced options: {:#08b}", self.sfp_data[93]);
         log::debug!("SFF-8472 compliance: {:#x}", self.sfp_data[94]);
 
-        if ((self.sfp_data[92]>>2) & 1) == 0 && ((self.sfp_data[92]>>6) & 1) == 1 {
+        if ((self.sfp_data[92]>>2) & 1) == 0 && (((self.sfp_data[92]>>6) & 1) == 1 || self.sfp_data[94] != 0) {
             log::debug!("Diagnostics:");
             log::debug!("\t\tTemp [°C]\tVcc [V]\tTX bias [mA]\tTX power [mW]\tRX power [mW]");
             log::debug!("+ Alarm: \t{:.2}\t\t{:.2}\t{:.2}\t\t{:.4}\t\t{:.4}", 
@@ -210,27 +228,13 @@ impl SFP {
             log::debug!("RX_LOS: {}", (self.sfp_diag[110] >> 1) & 1);
             log::debug!("Data not ready: {}", self.sfp_diag[110] & 1);
 
-            log::debug!("Temperature high alarm: {}", (self.sfp_diag[112] >> 7) & 1);
-            log::debug!("Temperature low alarm: {}", (self.sfp_diag[112] >> 6) & 1);
-            log::debug!("Vcc high alarm: {}", (self.sfp_diag[112] >> 5) & 1);
-            log::debug!("Vcc low alarm: {}", (self.sfp_diag[112] >> 4) & 1);
-            log::debug!("TX Bias high alarm: {}", (self.sfp_diag[112] >> 3) & 1);
-            log::debug!("TX Bias low alarm: {}", (self.sfp_diag[112] >> 2) & 1);
-            log::debug!("TX power high alarm: {}", (self.sfp_diag[112] >> 1) & 1);
-            log::debug!("TX power low alarm: {}", self.sfp_diag[112] & 1);
-            log::debug!("RX power high alarm: {}", (self.sfp_diag[113] >> 7) & 1);
-            log::debug!("RX power low alarm: {}", (self.sfp_diag[113] >> 6) & 1);
-
-            log::debug!("Temperature high warning: {}", (self.sfp_diag[116] >> 7) & 1);
-            log::debug!("Temperature low warning: {}", (self.sfp_diag[116] >> 6) & 1);
-            log::debug!("Vcc high warning: {}", (self.sfp_diag[116] >> 5) & 1);
-            log::debug!("Vcc low warning: {}", (self.sfp_diag[116] >> 4) & 1);
-            log::debug!("TX Bias high warning: {}", (self.sfp_diag[116] >> 3) & 1);
-            log::debug!("TX Bias low warning: {}", (self.sfp_diag[116] >> 2) & 1);
-            log::debug!("TX power high warning: {}", (self.sfp_diag[116] >> 1) & 1);
-            log::debug!("TX power low warning: {}", self.sfp_diag[116] & 1);
-            log::debug!("RX power high warning: {}", (self.sfp_diag[117] >> 7) & 1);
-            log::debug!("RX power low warning: {}", (self.sfp_diag[117] >> 6) & 1);
+            let alarm = ["Temperature high", "Temperature low", "Vcc high", "Vcc low", "TX Bias high", "TX Bias low", "TX Power high", "TX Power low", "RX Power high", "RX Power low"];
+            for i in 0..10 {
+                let register = i/8;
+                let bit = 7 - i % 8;
+                log::debug!("{} alarm value: {}", alarm[i], (self.sfp_diag[112 + register] >> bit) & 1);
+                log::debug!("{} warning value: {}", alarm[i], (self.sfp_diag[116 + register] >> bit) & 1);
+            }
         } else {
         log::debug!("Diagnostic monitoring is not implemented on the module.");
         }
