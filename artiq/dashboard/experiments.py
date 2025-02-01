@@ -114,8 +114,9 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         master_layout.addWidget(self.argeditor)
 
         # Create a toggle button that will collapse/expand the options.
-        self.fold_toggle = QtWidgets.QToolButton(text="Collapse Options", checkable=True)
-        self.fold_toggle.setChecked(True)
+        self.fold_toggle = QtWidgets.QToolButton(text="Collapse Options",
+                                                 checkable=True)
+        self.fold_toggle.setChecked(False)
         self.fold_toggle.setToolTip("Collapse/Expand options")
         self.fold_toggle.setArrowType(QtCore.Qt.DownArrow)
         self.fold_toggle.clicked.connect(self.on_fold_toggle)
@@ -155,6 +156,8 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         # Place the submit and termination buttons into the always-visible container.
         self._create_submit_widgets()
         self._create_reqterm_widgets()
+
+        self.on_fold_toggle()
 
     def on_fold_toggle(self):
         """Toggle the visibility of the options."""
