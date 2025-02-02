@@ -61,6 +61,20 @@ def get_argparser():
     return parser
 
 
+class EditableTabBar(QtWidgets.QTabBar):
+    def mouseDoubleClickEvent(self, event):
+        index = self.tabAt(event.pos())
+        if index != -1:
+            current_name = self.tabText(index)
+            new_name, ok = QtWidgets.QInputDialog.getText(
+                self, "Rename MDI Area", "Enter new name:",
+                text=current_name
+            )
+            if ok and new_name.strip():
+                self.setTabText(index, new_name.strip())
+        super().mouseDoubleClickEvent(event)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, server):
         QtWidgets.QMainWindow.__init__(self)
@@ -75,6 +89,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.exit_request = asyncio.Event()
 
         self.tab_widget = QtWidgets.QTabWidget()
+        self.tab_widget.setTabBar(EditableTabBar())
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_mdi_area)
         self.setCentralWidget(self.tab_widget)
