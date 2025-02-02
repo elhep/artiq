@@ -75,6 +75,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.exit_request = asyncio.Event()
 
         self.tab_widget = QtWidgets.QTabWidget()
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.tabCloseRequested.connect(self.close_mdi_area)
         self.setCentralWidget(self.tab_widget)
         self.add_mdi_area("Main Area")
         toolbar = QtWidgets.QToolBar("Main Toolbar")
@@ -96,6 +98,15 @@ class MainWindow(QtWidgets.QMainWindow):
         title = f"Area {count}"
         self.add_mdi_area(title)
         self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
+
+    def close_mdi_area(self, index):
+        """Slot to handle closing an MDI area (tab)."""
+        mdi_area = self.tab_widget.widget(index)
+        for experiment in mdi_area.subWindowList():
+            mdi_area.removeSubWindow(experiment)
+            experiment.close()
+        self.tab_widget.removeTab(index)
+        mdi_area.deleteLater()
 
     def closeEvent(self, event):
         event.ignore()
