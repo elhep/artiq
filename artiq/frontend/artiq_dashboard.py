@@ -74,6 +74,29 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.exit_request = asyncio.Event()
 
+        self.tab_widget = QtWidgets.QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+        self.add_mdi_area("Main Area")
+        toolbar = QtWidgets.QToolBar("Main Toolbar")
+        toolbar.setObjectName("MainToolbar")
+        self.addToolBar(toolbar)
+
+        add_area_action = QtWidgets.QAction("New MDI Area", self)
+        add_area_action.triggered.connect(self.new_mdi_area)
+        toolbar.addAction(add_area_action)
+
+    def add_mdi_area(self, title):
+        """Create a new MDI area (tab) with the given title."""
+        mdi_area = MdiArea()
+        self.tab_widget.addTab(mdi_area, title)
+
+    def new_mdi_area(self):
+        """Add a new MDI area (tab) with an auto-generated title."""
+        count = self.tab_widget.count() + 1
+        title = f"Area {count}"
+        self.add_mdi_area(title)
+        self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
+
     def closeEvent(self, event):
         event.ignore()
         self.exit_request.set()
@@ -114,7 +137,6 @@ class MdiArea(QtWidgets.QMdiArea):
         y = (self.height() - self.pixmap.height()) // 2
         painter.setOpacity(0.5)
         painter.drawPixmap(x, y, self.pixmap)
-
 
 def main():
     # initialize application
@@ -185,10 +207,6 @@ def main():
     # initialize main window
     main_window = MainWindow(args.server if server_name is None else server_name)
     smgr.register(main_window)
-    mdi_area = MdiArea()
-    mdi_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-    mdi_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-    main_window.setCentralWidget(mdi_area)
 
     # create UI components
     expmgr = experiments.ExperimentManager(main_window,
