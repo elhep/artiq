@@ -232,7 +232,6 @@ def main():
 
     # initialize main window
     main_window = MainWindow(args.server if server_name is None else server_name)
-    smgr.register(main_window)
 
     # create UI components
     expmgr = experiments.ExperimentManager(main_window,
@@ -242,6 +241,7 @@ def main():
                                            rpc_clients["schedule"],
                                            rpc_clients["experiment_db"])
     smgr.register(expmgr)
+    smgr.register(main_window)
     d_shortcuts = shortcuts.ShortcutsDock(main_window, expmgr)
     smgr.register(d_shortcuts)
     d_explorer = explorer.ExplorerDock(expmgr, d_shortcuts,
