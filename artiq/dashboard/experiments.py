@@ -713,9 +713,9 @@ class ExperimentManager:
     def save_state(self):
         for expurl, dock in self.open_experiments.items():
             self.dock_states[expurl] = dock.save_state()
-            experiment_mdi = {}
-            for expurl, dock in self.open_experiments.items():
-                experiment_mdi[expurl] = dock.mdiArea().tab_name
+        experiment_mdi = {}
+        for expurl, dock in self.open_experiments.items():
+            experiment_mdi[expurl] = dock.mdiArea().tab_name
         return {
             "scheduling": self.submission_scheduling,
             "options": self.submission_options,
