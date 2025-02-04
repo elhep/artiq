@@ -169,6 +169,7 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
             self.foldable_container.hide()
             self.fold_toggle.setText("Expand Options")
             self.fold_toggle.setArrowType(QtCore.Qt.RightArrow)
+        self.adjustSize()
 
     def _create_argument_editor(self):
         editor_class = self.manager.get_argument_editor_class(self.expurl)
@@ -296,6 +297,8 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         self.submit.setShortcut("CTRL+RETURN")
         self.submit.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                              QtWidgets.QSizePolicy.Expanding)
+        self.submit.setMaximumHeight(25)
+        self.submit.setMinimumWidth(250)
         self.always_visible_layout.addWidget(self.submit)
         self.submit.clicked.connect(self.submit_clicked)
 
@@ -317,6 +320,8 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         self.reqterm.setShortcut("CTRL+BACKSPACE")
         self.reqterm.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                                    QtWidgets.QSizePolicy.Expanding)
+        self.reqterm.setMaximumHeight(25)
+        self.reqterm.setMinimumWidth(250)
         self.always_visible_layout.addWidget(self.reqterm)
         self.reqterm.clicked.connect(self.reqterm_clicked)
 
