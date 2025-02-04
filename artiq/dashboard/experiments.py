@@ -116,6 +116,7 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         # Create a toggle button that will collapse/expand the options.
         self.fold_toggle = QtWidgets.QToolButton(text="Collapse Options",
                                                  checkable=True)
+        self.fold_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.fold_toggle.setChecked(False)
         self.fold_toggle.setToolTip("Collapse/Expand options")
         self.fold_toggle.setArrowType(QtCore.Qt.DownArrow)
