@@ -71,7 +71,12 @@ class EditableTabBar(QtWidgets.QTabBar):
                 text=current_name
             )
             if ok and new_name.strip():
-                self.setTabText(index, new_name.strip())
+                new_name = new_name.strip()
+                self.setTabText(index, new_name)
+                tab_widget = self.parent()
+                if isinstance(tab_widget, QtWidgets.QTabWidget):
+                    mdi_area = tab_widget.widget(index)
+                    mdi_area.tab_name = new_name
         super().mouseDoubleClickEvent(event)
 
 
