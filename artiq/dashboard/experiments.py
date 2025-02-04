@@ -112,6 +112,7 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         # Create a toggle button that will collapse/expand the options.
         self.fold_toggle = QtWidgets.QToolButton(text="Collapse scheduler settings",
                                                  checkable=True)
+        self.fold_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.fold_toggle.setChecked(False)
         self.fold_toggle.setToolTip("Collapse/Expand scheduler settings")
         self.fold_toggle.setArrowType(QtCore.Qt.DownArrow)
