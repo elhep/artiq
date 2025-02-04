@@ -115,7 +115,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
 
     def close_mdi_area(self, index):
-        """Slot to handle closing an MDI area (tab)."""
+        """Handle closing an MDI area (tab)."""
+        if self.tab_widget.count() == 1:
+            logging.warning("Cannot close last MDI area")
+            return
         mdi_area = self.tab_widget.widget(index)
         for experiment in mdi_area.subWindowList():
             mdi_area.removeSubWindow(experiment)
