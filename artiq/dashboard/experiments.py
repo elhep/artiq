@@ -109,11 +109,11 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         master_layout.addWidget(self.argeditor)
 
         # Create a toggle button that will collapse/expand the options.
-        self.fold_toggle = QtWidgets.QToolButton(text="Collapse Options",
+        self.fold_toggle = QtWidgets.QToolButton(text="Collapse scheduler settings",
                                                  checkable=True)
         self.fold_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.fold_toggle.setChecked(False)
-        self.fold_toggle.setToolTip("Collapse/Expand options")
+        self.fold_toggle.setToolTip("Collapse/Expand scheduler settings")
         self.fold_toggle.setArrowType(QtCore.Qt.DownArrow)
         self.fold_toggle.clicked.connect(self.on_fold_toggle)
         master_layout.addWidget(self.fold_toggle)
@@ -159,13 +159,13 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         """Toggle the visibility of the options."""
         if self.fold_toggle.isChecked():
             self.foldable_container.show()
-            self.fold_toggle.setText("Collapse Options")
+            self.fold_toggle.setText("Collapse scheduler settings")
             self.fold_toggle.setArrowType(QtCore.Qt.DownArrow)
             if self.width() < 550:
                 self.adjustSize()
         else:
             self.foldable_container.hide()
-            self.fold_toggle.setText("Expand Options")
+            self.fold_toggle.setText("Expand scheduler settings")
             self.fold_toggle.setArrowType(QtCore.Qt.RightArrow)
         self.always_visible_container.setMaximumHeight(30)
 
