@@ -46,20 +46,15 @@ class _ArgumentEditor(EntryTreeWidget):
             QtWidgets.QApplication.style().standardIcon(
                 QtWidgets.QStyle.SP_BrowserReload))
         recompute_arguments.clicked.connect(dock._recompute_arguments_clicked)
+        recompute_arguments.setMinimumWidth(200)
 
         load_hdf5 = QtWidgets.QPushButton("Load HDF5")
         load_hdf5.setIcon(QtWidgets.QApplication.style().standardIcon(
             QtWidgets.QStyle.SP_DialogOpenButton))
         load_hdf5.clicked.connect(dock._load_hdf5_clicked)
 
-        buttons = LayoutWidget()
-        buttons.addWidget(recompute_arguments, 1, 1)
-        buttons.addWidget(load_hdf5, 1, 2)
-        buttons.layout.setColumnStretch(0, 1)
-        buttons.layout.setColumnStretch(1, 0)
-        buttons.layout.setColumnStretch(2, 0)
-        buttons.layout.setColumnStretch(3, 1)
-        self.setItemWidget(self.bottom_item, 1, buttons)
+        self.setItemWidget(self.bottom_item, 0, load_hdf5)
+        self.setItemWidget(self.bottom_item, 1, recompute_arguments)
 
     def reset_entry(self, key):
         asyncio.ensure_future(self._recompute_argument(key))
@@ -166,11 +161,13 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
             self.foldable_container.show()
             self.fold_toggle.setText("Collapse Options")
             self.fold_toggle.setArrowType(QtCore.Qt.DownArrow)
+            if self.width() < 550:
+                self.adjustSize()
         else:
             self.foldable_container.hide()
             self.fold_toggle.setText("Expand Options")
             self.fold_toggle.setArrowType(QtCore.Qt.RightArrow)
-        self.adjustSize()
+        self.always_visible_container.setMaximumHeight(30)
 
     def _create_argument_editor(self):
         editor_class = self.manager.get_argument_editor_class(self.expurl)
@@ -299,7 +296,7 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         self.submit.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                              QtWidgets.QSizePolicy.Expanding)
         self.submit.setMaximumHeight(25)
-        self.submit.setMinimumWidth(250)
+        self.submit.setMinimumWidth(150)
         self.always_visible_layout.addWidget(self.submit)
         self.submit.clicked.connect(self.submit_clicked)
 
@@ -322,7 +319,7 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         self.reqterm.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                                    QtWidgets.QSizePolicy.Expanding)
         self.reqterm.setMaximumHeight(25)
-        self.reqterm.setMinimumWidth(250)
+        self.reqterm.setMinimumWidth(150)
         self.always_visible_layout.addWidget(self.reqterm)
         self.reqterm.clicked.connect(self.reqterm_clicked)
 
