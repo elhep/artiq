@@ -227,6 +227,8 @@ class MdiArea(QtWidgets.QMdiArea):
             QtGui.QKeySequence('Ctrl+Shift+C'), self)
         self.cascade.activated.connect(
             lambda: self.cascadeSubWindows())
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
 
     def paintEvent(self, event):
         QtWidgets.QMdiArea.paintEvent(self, event)
