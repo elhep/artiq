@@ -77,7 +77,7 @@ class EditableTabBar(QtWidgets.QTabBar):
         if index != -1:
             current_name = self.tabText(index)
             new_name, ok = QtWidgets.QInputDialog.getText(
-                self, "Rename MDI Area", "Enter new name:",
+                self, "Rename Workspace", "Enter new name:",
                 text=current_name
             )
             if ok and new_name.strip():
@@ -87,7 +87,7 @@ class EditableTabBar(QtWidgets.QTabBar):
                     if tab_name_exists(tab_widget, new_name, ignore_index=index):
                         QtWidgets.QMessageBox.warning(
                             self, "Duplicate Tab Name",
-                            "Another MDI area already has that name. Please choose a unique name."
+                            "Another workspace already has that name. Please choose a unique name."
                         )
                         return
                 self.setTabText(index, new_name)
@@ -118,10 +118,10 @@ class MainWindow(QtWidgets.QMainWindow):
         toolbar.setObjectName("MainToolbar")
         self.addToolBar(toolbar)
 
-        add_area_action = QtWidgets.QAction("New MDI Area", self)
+        add_area_action = QtWidgets.QAction("New Workspace", self)
         add_area_action.triggered.connect(self.new_mdi_area)
         toolbar.addAction(add_area_action)
-        self.add_mdi_area("Area 1")
+        self.add_mdi_area("Workspace 1")
 
     def add_mdi_area(self, title):
         """Create a new MDI area (tab) with the given title, ensuring uniqueness."""
@@ -137,14 +137,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def new_mdi_area(self):
         """Add a new MDI area (tab) with an auto-generated title."""
         count = self.tab_widget.count() + 1
-        title = f"Area {count}"
+        title = f"Workspace {count}"
         self.add_mdi_area(title)
         self.tab_widget.setCurrentIndex(self.tab_widget.count() - 1)
 
     def close_mdi_area(self, index):
         """Handle closing an MDI area (tab)."""
         if self.tab_widget.count() == 1:
-            logging.warning("Cannot close last MDI area")
+            logging.warning("Cannot close last workspace")
             return
         mdi_area = self.tab_widget.widget(index)
         for experiment in mdi_area.subWindowList():
