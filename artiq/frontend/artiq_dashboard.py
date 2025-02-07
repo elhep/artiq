@@ -77,7 +77,7 @@ class EditableTabBar(QtWidgets.QTabBar):
         if index != -1:
             current_name = self.tabText(index)
             new_name, ok = QtWidgets.QInputDialog.getText(
-                self, "Rename Workspace", "Enter new name:",
+                self, "Rename Workspace", "Enter a new name:",
                 text=current_name
             )
             if ok and new_name.strip():
