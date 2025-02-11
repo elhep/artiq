@@ -119,7 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
         plus_button.setText("+")
         plus_button.setToolTip("Add new workspace")
         plus_button.clicked.connect(self.new_mdi_area)
-        self.tab_widget.setCornerWidget(plus_button, QtCore.Qt.TopRightCorner)
+        self.tab_widget.setCornerWidget(plus_button, QtCore.Qt.TopLeftCorner)
 
         self.add_mdi_area("Workspace 1")
 
