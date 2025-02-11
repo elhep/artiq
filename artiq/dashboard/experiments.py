@@ -162,7 +162,9 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
             self.fold_toggle.setText("Collapse scheduler settings")
             self.fold_toggle.setArrowType(QtCore.Qt.DownArrow)
             if self.width() < 550:
-                self.adjustSize()
+                ideal_width = self.sizeHint().width()
+                self.resize(ideal_width, self.height())
+
         else:
             self.foldable_container.hide()
             self.fold_toggle.setText("Expand scheduler settings")
