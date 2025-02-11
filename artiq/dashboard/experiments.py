@@ -52,6 +52,7 @@ class _ArgumentEditor(EntryTreeWidget):
         load_hdf5.setIcon(QtWidgets.QApplication.style().standardIcon(
             QtWidgets.QStyle.SP_DialogOpenButton))
         load_hdf5.clicked.connect(dock._load_hdf5_clicked)
+        load_hdf5.setMinimumWidth(120)
 
         self.setItemWidget(self.bottom_item, 0, load_hdf5)
         self.setItemWidget(self.bottom_item, 1, recompute_arguments)
