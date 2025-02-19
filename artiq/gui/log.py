@@ -199,7 +199,7 @@ class _Model(QtCore.QAbstractItemModel):
 
 class LogDock(QDockWidgetCloseDetect):
     def __init__(self, manager, name):
-        QDockWidgetCloseDetect.__init__(self, "Log")
+        QDockWidgetCloseDetect.__init__(self, "")
         self.setObjectName(name)
         self.main_window = manager.main_window  # store a reference to the main window
 
@@ -283,7 +283,22 @@ class LogDock(QDockWidgetCloseDetect):
 
     def showEvent(self, event):
         super().showEvent(event)
+        QtCore.QTimer.singleShot(0, self._create_log_button)
         QtCore.QTimer.singleShot(0, self._connect_to_tab_bar)
+
+    def _create_log_button(self):
+        """
+        To make the tab style more managable we add button with text instead
+        of the tab name
+        """
+        tabbar = self._find_tab_bar()
+        if tabbar is not None:
+            idx = self._tab_index(tabbar)
+            if idx is not None:
+                # Create a QLabel to serve as the tab's text.
+                label = QtWidgets.QLabel("Log")
+                label.setAlignment(QtCore.Qt.AlignCenter)
+                tabbar.setTabButton(idx, QtWidgets.QTabBar.LeftSide, label)
 
     def _connect_to_tab_bar(self):
         """
@@ -294,27 +309,13 @@ class LogDock(QDockWidgetCloseDetect):
         if tabbar is not None:
             tabbar.currentChanged.connect(self._on_tab_changed)
 
-    def _on_tab_changed(self, index):
-        """
-        When the tab bar selection changes, check if our tab is the active one.
-        If so, clear any alert (i.e. set text color back to black).
-        """
-        tabbar = self._find_tab_bar()
-        if tabbar is None:
-            return
-
-        my_index = self._tab_index(tabbar)
-        if my_index is not None and my_index == index:
-            self.clear_alert()
-
     def _find_tab_bar(self):
         """
-        Search for the QTabBar that is used by the main window for tabified dock widgets.
+        Search for a QTabBar among main_window’s children.
+        This lookup is done when the dock is shown.
         """
-        # This is a bit hacky: we look through children of main_window.
         tabbars = self.main_window.findChildren(QtWidgets.QTabBar)
         for tabbar in tabbars:
-            # Look for a tab whose text matches our window title.
             for i in range(tabbar.count()):
                 if tabbar.tabText(i) == self.windowTitle():
                     return tabbar
@@ -329,27 +330,41 @@ class LogDock(QDockWidgetCloseDetect):
                 return i
         return None
 
+    def _on_tab_changed(self, index):
+        tabbar = self._find_tab_bar()
+        if tabbar is None:
+            return
+        my_index = self._tab_index(tabbar)
+        if my_index is not None and my_index == index:
+            self.clear_alert()
+
     def set_alert(self, color):
         """
-        Change the tab's text color using the QTabBar.
+        Change the tab's color.
         """
         self.current_alert_color = color
         tabbar = self._find_tab_bar()
         if tabbar is not None:
             idx = self._tab_index(tabbar)
             if idx is not None:
-                tabbar.setTabTextColor(idx, QtGui.QColor(color))
+                label = tabbar.tabButton(idx, QtWidgets.QTabBar.LeftSide)
+                if isinstance(label, QtWidgets.QLabel):
+                    #label.setStyleSheet("color: %s; font-weight: bold;" % color)
+                    label.setStyleSheet("background-color: %s;" % color)
 
     def clear_alert(self):
         """
-        Revert the tab's text color to black.
+        Revert the tab's color.
         """
         self.current_alert_color = None
         tabbar = self._find_tab_bar()
         if tabbar is not None:
             idx = self._tab_index(tabbar)
             if idx is not None:
-                tabbar.setTabTextColor(idx, QtGui.QColor("black"))
+                label = tabbar.tabButton(idx, QtWidgets.QTabBar.LeftSide)
+                if isinstance(label, QtWidgets.QLabel):
+                    #label.setStyleSheet("color: black; font-weight: normal;")
+                    label.setStyleSheet("background-color: transparent;")
 
 
     def apply_text_filter(self):
@@ -437,9 +452,8 @@ class LogDockManager:
                     if msg[0] >= logging.ERROR:
                         dock.set_alert("red")
                     elif msg[0] >= logging.WARNING:
-                        # Only set orange if a red alert isn’t already flagged.
                         if dock.current_alert_color != "red":
-                            dock.set_alert("orange")
+                            dock.set_alert("yellow")
 
     def create_new_dock(self, add_to_area=True):
         n = 0
