@@ -165,8 +165,8 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
             if self.width() < 550:
                 ideal_width = self.sizeHint().width()
                 self.resize(ideal_width, self.height())
-            if self.height() < 280:
-                self.resize(self.width(), 280)
+            if self.height() < 285:
+                self.resize(self.width(), 285)
 
         else:
             self.foldable_container.hide()
