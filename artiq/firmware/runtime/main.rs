@@ -29,6 +29,7 @@ extern crate riscv;
 extern crate tar_no_std;
 
 use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::convert::TryFrom;
 use smoltcp::wire::HardwareAddress;
@@ -81,6 +82,35 @@ fn grabber_thread(io: sched::Io) {
         io.sleep(200).unwrap();
     }
 }
+
+fn sfp_debug_thread(io: sched::Io) {
+    let mut sfp = Vec::new();
+    for i in 0..4 {
+        let sfp_try = board_misoc::sfp::SFP::new(i);
+        if sfp_try.is_ok() {
+            sfp.push(sfp_try.unwrap());
+            info!("Detected SFP{}", i);
+        } else {
+            debug!("SFP{} module not detected", i);
+        }
+    }
+    for sfp_n in sfp.iter_mut() {
+        sfp_n.print_all();
+        sfp_n.print_some();
+    }
+    loop {
+        // Drop modules that were removed
+        sfp.retain(|sfp_n| sfp_n.check_ack().unwrap_or(false));
+
+        for sfp_n in sfp.iter_mut() {
+            sfp_n.read_diagnostic_data();
+            sfp_n.print_alarms();
+        }
+        io.sleep(5000).unwrap();
+    }
+}
+
+
 
 fn setup_log_levels() {
     match config::read_str("log_level", |r| r.map(|s| s.parse())) {
@@ -235,6 +265,8 @@ fn startup() {
 
     #[cfg(has_grabber)]
     io.spawn(4096, grabber_thread);
+
+    io.spawn(8192, sfp_debug_thread);
 
     let mut net_stats = ethmac::EthernetStatistics::new();
     loop {
