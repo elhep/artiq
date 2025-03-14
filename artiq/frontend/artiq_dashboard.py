@@ -289,6 +289,7 @@ def main():
                                     server=args.server.replace(":", "."),
                                     port=args.port_notify))
 
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
     app = QtWidgets.QApplication(["ARTIQ Dashboard"])
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
