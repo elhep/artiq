@@ -14,6 +14,28 @@ from artiq.gui.scientific_spinbox import ScientificSpinBox
 logger = logging.getLogger(__name__)
 
 
+class CustomLabel(QtWidgets.QLabel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pixmap = QtGui.QPixmap(os.path.join(artiq_dir, "gui", "pencil.svg"))
+        original_size = self.pixmap.size()
+        self.empty_pixmap = QtGui.QPixmap(original_size)
+        self.empty_pixmap.fill(QtCore.Qt.transparent)
+        self.setPixmap(self.empty_pixmap)
+        self.setToolTip("Non-default value set")
+
+    def setVisible_(self, visible: bool):
+        """
+        Cannot override setVisible, as it's always called
+        with True argument on startup
+        """
+        logging.warning(f"setting visible {visible}")
+        if visible:
+            self.setPixmap(self.pixmap)
+        else:
+            self.setPixmap(self.empty_pixmap)
+
+
 class EntryTreeWidget(QtWidgets.QTreeWidget):
     quickStyleClicked = QtCore.pyqtSignal()
 
@@ -87,15 +109,9 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
                 QtWidgets.QStyle.SP_BrowserReload))
         reset_entry.clicked.connect(partial(self.reset_entry, key))
 
-        pixmap = QtGui.QPixmap(os.path.join(artiq_dir, "gui", "pencil.svg"))
-
-        modified_value_icon = QtWidgets.QLabel()
-        modified_value_icon.setToolTip("Non-default value set")
-        modified_value_icon.setPixmap(pixmap)
-        modified_value_icon.setVisible(False)
-
+        modified_value_icon = CustomLabel()
         widgets["modified_value_icon"] = modified_value_icon
-        entry.modifiedValue.connect(modified_value_icon.setVisible)
+        entry.modifiedValue.connect(modified_value_icon.setVisible_)
 
         disable_other_scans = QtWidgets.QToolButton()
         widgets["disable_other_scans"] = disable_other_scans
@@ -146,8 +162,8 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
         new_entry = procdesc_to_entry(argument["desc"])(argument)
         widgets["entry"] = new_entry
         if "modified_value_icon" in widgets:
-            widgets["modified_value_icon"].setVisible(False)
-            new_entry.modifiedValue.connect(widgets["modified_value_icon"].setVisible)
+            widgets["modified_value_icon"].setVisible_(False)
+            new_entry.modifiedValue.connect(widgets["modified_value_icon"].setVisible_)
         widgets["disable_other_scans"].setVisible(
             isinstance(widgets["entry"], ScanEntry))
         widgets["fix_layout"].deleteLater()
