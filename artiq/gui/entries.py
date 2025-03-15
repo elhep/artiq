@@ -1,9 +1,11 @@
 import logging
+import os
 from collections import OrderedDict
 from functools import partial
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from artiq import __artiq_dir__ as artiq_dir
 from artiq.gui.tools import LayoutWidget, disable_scroll_wheel, WheelFilter
 from artiq.gui.scanwidget import ScanWidget
 from artiq.gui.scientific_spinbox import ScientificSpinBox
@@ -85,6 +87,16 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
                 QtWidgets.QStyle.SP_BrowserReload))
         reset_entry.clicked.connect(partial(self.reset_entry, key))
 
+        pixmap = QtGui.QPixmap(os.path.join(artiq_dir, "gui", "pencil.svg"))
+
+        modified_value_icon = QtWidgets.QLabel()
+        modified_value_icon.setToolTip("Non-default value set")
+        modified_value_icon.setPixmap(pixmap)
+        modified_value_icon.setVisible(False)
+
+        widgets["modified_value_icon"] = modified_value_icon
+        entry.modifiedValue.connect(modified_value_icon.setVisible)
+
         disable_other_scans = QtWidgets.QToolButton()
         widgets["disable_other_scans"] = disable_other_scans
         disable_other_scans.setIcon(
@@ -99,7 +111,8 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
         tool_buttons = LayoutWidget()
         tool_buttons.layout.setRowStretch(0, 1)
         tool_buttons.layout.setRowStretch(3, 1)
-        tool_buttons.addWidget(reset_entry, 1)
+        tool_buttons.addWidget(reset_entry, 1, 0)
+        tool_buttons.addWidget(modified_value_icon, 1, 1)
         tool_buttons.addWidget(disable_other_scans, 2)
         self.setItemWidget(widget_item, 2, tool_buttons)
 
@@ -130,7 +143,11 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
         # results in a bug.
 
         widgets["entry"].deleteLater()
-        widgets["entry"] = procdesc_to_entry(argument["desc"])(argument)
+        new_entry = procdesc_to_entry(argument["desc"])(argument)
+        widgets["entry"] = new_entry
+        if "modified_value_icon" in widgets:
+            widgets["modified_value_icon"].setVisible(False)
+            new_entry.modifiedValue.connect(widgets["modified_value_icon"].setVisible)
         widgets["disable_other_scans"].setVisible(
             isinstance(widgets["entry"], ScanEntry))
         widgets["fix_layout"].deleteLater()
@@ -164,10 +181,18 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
 
 
 class StringEntry(QtWidgets.QLineEdit):
+    modifiedValue = QtCore.pyqtSignal(bool)
     def __init__(self, argument):
         QtWidgets.QLineEdit.__init__(self)
         self.setText(argument["state"])
         def update(text):
+            procdesc = argument["desc"]
+            default_value = StringEntry.default_state(procdesc)
+            if text != default_value:
+                self.modifiedValue.emit(True)
+                logging.warning(f"State updated to non-default value: {text}")
+            else:
+                self.modifiedValue.emit(False)
             argument["state"] = text
         self.textEdited.connect(update)
 
@@ -181,10 +206,19 @@ class StringEntry(QtWidgets.QLineEdit):
 
 
 class BooleanEntry(QtWidgets.QCheckBox):
+    modifiedValue = QtCore.pyqtSignal(bool)
     def __init__(self, argument):
         QtWidgets.QCheckBox.__init__(self)
         self.setChecked(argument["state"])
         def update(checked):
+            procdesc = argument["desc"]
+            default_value = BooleanEntry.default_state(procdesc)
+            if bool(checked) != default_value:
+                self.modifiedValue.emit(True)
+                logging.warning(f"State updated to non-default value: {bool(checked)}")
+            else:
+                self.modifiedValue.emit(False)
+                logging.warning(f"State updated to default value: {bool(checked)}")
             argument["state"] = bool(checked)
         self.stateChanged.connect(update)
 
@@ -198,6 +232,7 @@ class BooleanEntry(QtWidgets.QCheckBox):
 
 
 class EnumerationEntry(QtWidgets.QWidget):
+    modifiedValue = QtCore.pyqtSignal(bool)
     quickStyleClicked = QtCore.pyqtSignal()
 
     def __init__(self, argument):
@@ -227,6 +262,12 @@ class EnumerationEntry(QtWidgets.QWidget):
             layout.addWidget(self.combo_box)
 
             def update(index):
+                default_value = EnumerationEntry.default_state(procdesc)
+                if index != default_value:
+                    self.modifiedValue.emit(True)
+                    logging.warning(f"State updated to non-default value: {index}")
+                else:
+                    self.modifiedValue.emit(False)
                 argument["state"] = choices[index]
             self.combo_box.currentIndexChanged.connect(update)
 
@@ -243,6 +284,7 @@ class EnumerationEntry(QtWidgets.QWidget):
 
 
 class NumberEntryInt(QtWidgets.QSpinBox):
+    modifiedValue = QtCore.pyqtSignal(bool)
     def __init__(self, argument):
         QtWidgets.QSpinBox.__init__(self)
         disable_scroll_wheel(self)
@@ -261,6 +303,12 @@ class NumberEntryInt(QtWidgets.QSpinBox):
 
         self.setValue(argument["state"])
         def update(value):
+            default_value = NumberEntryInt.default_state(procdesc)
+            if value != default_value:
+                self.modifiedValue.emit(True)
+                logging.warning(f"State updated to non-default value: {value}")
+            else:
+                self.modifiedValue.emit(False)
             argument["state"] = value
         self.valueChanged.connect(update)
 
@@ -288,6 +336,7 @@ class NumberEntryInt(QtWidgets.QSpinBox):
 
 
 class NumberEntryFloat(ScientificSpinBox):
+    modifiedValue = QtCore.pyqtSignal(bool)
     def __init__(self, argument):
         ScientificSpinBox.__init__(self)
         disable_scroll_wheel(self)
@@ -310,6 +359,13 @@ class NumberEntryFloat(ScientificSpinBox):
 
         self.setValue(argument["state"]/scale)
         def update(value):
+            default_value = NumberEntryFloat.default_state(procdesc)
+            if value*scale != default_value:
+                self.modifiedValue.emit(True)
+                logging.warning(f"State updated to non-default value: {value}")
+            else:
+                logging.warning(f"State updated to default value: {value}")
+                self.modifiedValue.emit(False)
             argument["state"] = value*scale
         self.valueChanged.connect(update)
 
