@@ -29,7 +29,6 @@ class CustomLabel(QtWidgets.QLabel):
         Cannot override setVisible, as it's always called
         with True argument on startup
         """
-        logging.warning(f"setting visible {visible}")
         if visible:
             self.setPixmap(self.pixmap)
         else:
@@ -206,7 +205,6 @@ class StringEntry(QtWidgets.QLineEdit):
             default_value = StringEntry.default_state(procdesc)
             if text != default_value:
                 self.modifiedValue.emit(True)
-                logging.warning(f"State updated to non-default value: {text}")
             else:
                 self.modifiedValue.emit(False)
             argument["state"] = text
@@ -231,10 +229,8 @@ class BooleanEntry(QtWidgets.QCheckBox):
             default_value = BooleanEntry.default_state(procdesc)
             if bool(checked) != default_value:
                 self.modifiedValue.emit(True)
-                logging.warning(f"State updated to non-default value: {bool(checked)}")
             else:
                 self.modifiedValue.emit(False)
-                logging.warning(f"State updated to default value: {bool(checked)}")
             argument["state"] = bool(checked)
         self.stateChanged.connect(update)
 
@@ -281,7 +277,6 @@ class EnumerationEntry(QtWidgets.QWidget):
                 default_value = EnumerationEntry.default_state(procdesc)
                 if index != default_value:
                     self.modifiedValue.emit(True)
-                    logging.warning(f"State updated to non-default value: {index}")
                 else:
                     self.modifiedValue.emit(False)
                 argument["state"] = choices[index]
@@ -322,7 +317,6 @@ class NumberEntryInt(QtWidgets.QSpinBox):
             default_value = NumberEntryInt.default_state(procdesc)
             if value != default_value:
                 self.modifiedValue.emit(True)
-                logging.warning(f"State updated to non-default value: {value}")
             else:
                 self.modifiedValue.emit(False)
             argument["state"] = value
@@ -378,9 +372,7 @@ class NumberEntryFloat(ScientificSpinBox):
             default_value = NumberEntryFloat.default_state(procdesc)
             if value*scale != default_value:
                 self.modifiedValue.emit(True)
-                logging.warning(f"State updated to non-default value: {value}")
             else:
-                logging.warning(f"State updated to default value: {value}")
                 self.modifiedValue.emit(False)
             argument["state"] = value*scale
         self.valueChanged.connect(update)
