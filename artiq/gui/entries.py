@@ -14,7 +14,7 @@ from artiq.gui.scientific_spinbox import ScientificSpinBox
 logger = logging.getLogger(__name__)
 
 
-class CustomLabel(QtWidgets.QLabel):
+class ModifiedValueLabel(QtWidgets.QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pixmap = QtGui.QPixmap(os.path.join(artiq_dir, "gui", "pencil.svg"))
@@ -108,7 +108,7 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
                 QtWidgets.QStyle.SP_BrowserReload))
         reset_entry.clicked.connect(partial(self.reset_entry, key))
 
-        modified_value_icon = CustomLabel()
+        modified_value_icon = ModifiedValueLabel()
         widgets["modified_value_icon"] = modified_value_icon
         entry.modifiedValue.connect(modified_value_icon.setVisible_)
 
