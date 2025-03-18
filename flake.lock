@@ -124,19 +124,20 @@
     "src-misoc": {
       "flake": false,
       "locked": {
-        "lastModified": 1739436988,
-        "narHash": "sha256-zEihEV6kqRtrZWyu7uCNyHOXE/rluVloPuT4ECYVJ+g=",
-        "ref": "refs/heads/master",
-        "rev": "e3f4fd040b90b05d580bf578ca49244f0b7d861a",
-        "revCount": 2483,
+        "lastModified": 1741778921,
+        "narHash": "sha256-lQBHr6dSd6sG/sGWTlvg2VOsW2dr8cYxix5P3l/L3ms=",
+        "ref": "release-8-eth-port-arg",
+        "rev": "233b82e5b16626398f64ea093b8aa964282888ee",
+        "revCount": 2484,
         "submodules": true,
         "type": "git",
-        "url": "https://github.com/m-labs/misoc.git"
+        "url": "https://github.com/elhep/misoc.git"
       },
       "original": {
+        "ref": "release-8-eth-port-arg",
         "submodules": true,
         "type": "git",
-        "url": "https://github.com/m-labs/misoc.git"
+        "url": "https://github.com/elhep/misoc.git"
       }
     },
     "src-pythonparser": {

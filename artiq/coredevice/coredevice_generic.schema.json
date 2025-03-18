@@ -53,6 +53,11 @@
             "type": "boolean",
             "default": false
         },
+        "eth_sfp": {
+            "type": "integer",
+            "default": 0,
+            "description": "SFP cage number used for Ethernet"
+        },
         "core_addr": {
             "type": "string",
             "format": "ipv4",

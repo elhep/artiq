@@ -165,7 +165,7 @@ class MasterBase(MiniSoC, AMPSoC):
     }
     mem_map.update(MiniSoC.mem_map)
 
-    def __init__(self, rtio_clk_freq=125e6, enable_sata=False, with_wrpll=False, gateware_identifier_str=None, hw_rev="v2.0", **kwargs):
+    def __init__(self, rtio_clk_freq=125e6, enable_sata=False, with_wrpll=False, gateware_identifier_str=None, hw_rev="v2.0", eth_sfp=0, **kwargs):
         if hw_rev in ("v1.0", "v1.1"):
             cpu_bus_width = 32
         else:
@@ -181,6 +181,7 @@ class MasterBase(MiniSoC, AMPSoC):
                          ethmac_ntxslots=4,
                          clk_freq=rtio_clk_freq,
                          rtio_sys_merge=True,
+                         eth_sfp=eth_sfp,
                          **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
@@ -220,15 +221,19 @@ class MasterBase(MiniSoC, AMPSoC):
 
         self.config["RTIO_FREQUENCY"] = str(rtio_clk_freq/1e6)
 
+        if self.platform.hw_rev == "v2.0":
+            drtio_sfp_ids = list(range(4))
+        else:
+            drtio_sfp_ids = list(range(3))
+        drtio_sfp_ids.remove(eth_sfp)
+
         drtio_data_pads = []
         if enable_sata:
             drtio_data_pads.append(platform.request("sata"))
-        drtio_data_pads += [platform.request("sfp", i) for i in range(1, 3)]
-        if self.platform.hw_rev == "v2.0":
-            drtio_data_pads.append(platform.request("sfp", 3))
+        drtio_data_pads += [platform.request("sfp", i) for i in drtio_sfp_ids]
 
         if self.platform.hw_rev in ("v1.0", "v1.1"):
-            sfp_ctls = [platform.request("sfp_ctl", i) for i in range(1, 3)]
+            sfp_ctls = [platform.request("sfp_ctl", i) for i in drtio_sfp_ids]
             self.comb += [sc.tx_disable.eq(0) for sc in sfp_ctls]
 
         self.submodules.gt_drtio = gtp_7series.GTP(
@@ -246,8 +251,8 @@ class MasterBase(MiniSoC, AMPSoC):
             self.comb += [sfp_ctl.led.eq(channel.rx_ready)
                 for sfp_ctl, channel in zip(sfp_ctls, sfp_channels)]
         if self.platform.hw_rev == "v2.0":
-            self.comb += [self.virtual_leds.get(i + 1).eq(channel.rx_ready)
-                          for i, channel in enumerate(sfp_channels)]
+            self.comb += [self.virtual_leds.get(i).eq(channel.rx_ready)
+                          for i, channel in zip(drtio_sfp_ids, sfp_channels)]
 
         self.submodules.rtio_tsc = rtio.TSC(glbl_fine_ts_width=3)
 
@@ -667,6 +672,7 @@ class GenericStandalone(StandaloneBase):
         StandaloneBase.__init__(self,
             hw_rev=hw_rev,
             with_wrpll=description["enable_wrpll"],
+            eth_sfp=description["eth_sfp"],
             **kwargs)
         self.config["RTIO_FREQUENCY"] = "{:.1f}".format(description["rtio_frequency"]/1e6)
         if "ext_ref_frequency" in description:
@@ -723,6 +729,7 @@ class GenericMaster(MasterBase):
             enable_sata=description["enable_sata_drtio"],
             enable_sys5x=has_drtio_over_eem,
             with_wrpll=description["enable_wrpll"],
+            eth_sfp=description["eth_sfp"],
             **kwargs)
         if "ext_ref_frequency" in description:
             self.config["SI5324_EXT_REF"] = None
