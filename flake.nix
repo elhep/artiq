@@ -11,7 +11,7 @@
   inputs.artiq-comtools.inputs.sipyco.follows = "sipyco";
 
   inputs.src-migen = { url = github:m-labs/migen; flake = false; };
-  inputs.src-misoc = { type = "git"; url = "https://github.com/m-labs/misoc.git"; submodules = true; flake = false; };
+  inputs.src-misoc = { type = "git"; url = "https://github.com/elhep/misoc.git"; ref = "release-8-eth-port-arg"; submodules = true; flake = false; };
 
   outputs = { self, nixpkgs, mozilla-overlay, sipyco, src-pythonparser, artiq-comtools, src-migen, src-misoc }:
     let
