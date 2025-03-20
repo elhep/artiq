@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from collections import OrderedDict
@@ -131,6 +132,9 @@ class EntryTreeWidget(QtWidgets.QTreeWidget):
         tool_buttons.addWidget(disable_other_scans, 2)
         self.setItemWidget(widget_item, 2, tool_buttons)
 
+    def update_defaults(self):
+        asyncio.ensure_future(self._update_defaults())
+
     def _get_group(self, key):
         if key in self._groups:
             return self._groups[key]
@@ -200,15 +204,23 @@ class StringEntry(QtWidgets.QLineEdit):
     def __init__(self, argument):
         QtWidgets.QLineEdit.__init__(self)
         self.setText(argument["state"])
+        self.procdesc = argument["desc"]
         def update(text):
-            procdesc = argument["desc"]
-            default_value = StringEntry.default_state(procdesc)
+            default_value = StringEntry.default_state(self.procdesc)
             if text != default_value:
                 self.modifiedValue.emit(True)
             else:
                 self.modifiedValue.emit(False)
             argument["state"] = text
         self.textEdited.connect(update)
+
+    def is_default(self):
+        value = self.value()
+        default_value = self.default_state(self.procdesc)
+        if value != default_value:
+            return False
+        else:
+            return True
 
     @staticmethod
     def state_to_value(state):
@@ -224,15 +236,23 @@ class BooleanEntry(QtWidgets.QCheckBox):
     def __init__(self, argument):
         QtWidgets.QCheckBox.__init__(self)
         self.setChecked(argument["state"])
+        self.procdesc = argument["desc"]
         def update(checked):
-            procdesc = argument["desc"]
-            default_value = BooleanEntry.default_state(procdesc)
+            default_value = BooleanEntry.default_state(self.procdesc)
             if bool(checked) != default_value:
                 self.modifiedValue.emit(True)
             else:
                 self.modifiedValue.emit(False)
             argument["state"] = bool(checked)
         self.stateChanged.connect(update)
+
+    def is_default(self):
+        value = bool(self.isChecked())
+        default_value = bool(self.default_state(self.procdesc))
+        if value != default_value:
+            return False
+        else:
+            return True
 
     @staticmethod
     def state_to_value(state):
@@ -251,9 +271,9 @@ class EnumerationEntry(QtWidgets.QWidget):
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QHBoxLayout()
         self.setLayout(layout)
-        procdesc = argument["desc"]
-        choices = procdesc["choices"]
-        if procdesc["quickstyle"]:
+        self.procdesc = argument["desc"]
+        choices = self.procdesc["choices"]
+        if self.procdesc["quickstyle"]:
             self.btn_group = QtWidgets.QButtonGroup()
             for i, choice in enumerate(choices):
                 button = QtWidgets.QPushButton(choice)
@@ -274,13 +294,21 @@ class EnumerationEntry(QtWidgets.QWidget):
             layout.addWidget(self.combo_box)
 
             def update(index):
-                default_value = EnumerationEntry.default_state(procdesc)
+                default_value = EnumerationEntry.default_state(self.procdesc)
                 if index != default_value:
                     self.modifiedValue.emit(True)
                 else:
                     self.modifiedValue.emit(False)
                 argument["state"] = choices[index]
             self.combo_box.currentIndexChanged.connect(update)
+
+    def is_default(self):
+        value = self.value()
+        default_value = self.default_state(self.procdesc)
+        if value != default_value:
+            return False
+        else:
+            return True
 
     @staticmethod
     def state_to_value(state):
@@ -299,28 +327,36 @@ class NumberEntryInt(QtWidgets.QSpinBox):
     def __init__(self, argument):
         QtWidgets.QSpinBox.__init__(self)
         disable_scroll_wheel(self)
-        procdesc = argument["desc"]
-        self.setSingleStep(procdesc["step"])
-        if procdesc["min"] is not None:
-            self.setMinimum(procdesc["min"])
+        self.procdesc = argument["desc"]
+        self.setSingleStep(self.procdesc["step"])
+        if self.procdesc["min"] is not None:
+            self.setMinimum(self.procdesc["min"])
         else:
             self.setMinimum(-((1 << 31) - 1))
-        if procdesc["max"] is not None:
-            self.setMaximum(procdesc["max"])
+        if self.procdesc["max"] is not None:
+            self.setMaximum(self.procdesc["max"])
         else:
             self.setMaximum((1 << 31) - 1)
-        if procdesc["unit"]:
-            self.setSuffix(" " + procdesc["unit"])
+        if self.procdesc["unit"]:
+            self.setSuffix(" " + self.procdesc["unit"])
 
         self.setValue(argument["state"])
         def update(value):
-            default_value = NumberEntryInt.default_state(procdesc)
+            default_value = NumberEntryInt.default_state(self.procdesc)
             if value != default_value:
                 self.modifiedValue.emit(True)
             else:
                 self.modifiedValue.emit(False)
             argument["state"] = value
         self.valueChanged.connect(update)
+
+    def is_default(self):
+        value = self.value()
+        default_value = self.default_state(self.procdesc)
+        if value != default_value:
+            return False
+        else:
+            return True
 
     @staticmethod
     def state_to_value(state):
@@ -350,32 +386,40 @@ class NumberEntryFloat(ScientificSpinBox):
     def __init__(self, argument):
         ScientificSpinBox.__init__(self)
         disable_scroll_wheel(self)
-        procdesc = argument["desc"]
-        scale = procdesc["scale"]
-        self.setDecimals(procdesc["precision"])
+        self.procdesc = argument["desc"]
+        scale = self.procdesc["scale"]
+        self.setDecimals(self.procdesc["precision"])
         self.setSigFigs()
-        self.setSingleStep(procdesc["step"]/scale)
+        self.setSingleStep(self.procdesc["step"]/scale)
         self.setRelativeStep()
-        if procdesc["min"] is not None:
-            self.setMinimum(procdesc["min"]/scale)
+        if self.procdesc["min"] is not None:
+            self.setMinimum(self.procdesc["min"]/scale)
         else:
             self.setMinimum(float("-inf"))
-        if procdesc["max"] is not None:
-            self.setMaximum(procdesc["max"]/scale)
+        if self.procdesc["max"] is not None:
+            self.setMaximum(self.procdesc["max"]/scale)
         else:
             self.setMaximum(float("inf"))
-        if procdesc["unit"]:
-            self.setSuffix(" " + procdesc["unit"])
+        if self.procdesc["unit"]:
+            self.setSuffix(" " + self.procdesc["unit"])
 
         self.setValue(argument["state"]/scale)
         def update(value):
-            default_value = NumberEntryFloat.default_state(procdesc)
+            default_value = NumberEntryFloat.default_state(self.procdesc)
             if value*scale != default_value:
                 self.modifiedValue.emit(True)
             else:
                 self.modifiedValue.emit(False)
             argument["state"] = value*scale
         self.valueChanged.connect(update)
+
+    def is_default(self):
+        value = self.value()
+        default_value = self.default_state(self.procdesc)
+        if value*self.procdesc["scale"] != default_value:
+            return False
+        else:
+            return True
 
     @staticmethod
     def state_to_value(state):
