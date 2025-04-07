@@ -530,10 +530,15 @@ class AppletsDock(QtWidgets.QDockWidget):
 
     def create(self, item, name, spec):
         dock = _AppletDock(self.dataset_sub, self.dataset_ctl, self.expmgr, item.applet_uid, name, spec, self.extra_substitutes)
-        self.main_window.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
-        dock.setFloating(True)
+        dock.setTitleBarWidget(QtWidgets.QWidget())
         asyncio.ensure_future(dock.start(), loop=self._loop)
         dock.sigClosed.connect(partial(self.on_dock_closed, item, dock))
+        mdi_subwindow = QtWidgets.QMdiSubWindow()
+        mdi_subwindow.setWidget(dock)
+        mdi_area = self.main_window.centralWidget().currentWidget()
+        if mdi_area is not None:
+            mdi_area.addSubWindow(mdi_subwindow)
+        mdi_subwindow.show()
         return dock
 
     def item_changed(self, item, column):
@@ -573,6 +578,9 @@ class AppletsDock(QtWidgets.QDockWidget):
         item.applet_geometry = dock.saveGeometry()
         asyncio.ensure_future(dock.terminate(), loop=self._loop)
         item.setCheckState(0, QtCore.Qt.Unchecked)
+        mdi_subwindow = dock.parent()
+        if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
+            mdi_subwindow.close()
 
     def get_untitled(self):
         existing_names = set()
@@ -754,7 +762,7 @@ class AppletsDock(QtWidgets.QDockWidget):
                 raise ValueError("Invalid item state: " + str(wis[0]))
 
     def restore_state(self, state):
-        self.restore_state_item(state, None)
+        QtCore.QTimer.singleShot(0, partial(self.restore_state_item, state, None))
 
     def close_nondocked(self):
         def walk(wi):
