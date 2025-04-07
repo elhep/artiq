@@ -553,10 +553,11 @@ class AppletsDock(QtWidgets.QDockWidget):
                         spec = self.get_spec(item)
                         dock = self.create(item, name, spec)
                         item.applet_dock = dock
-                        if item.applet_geometry is not None:
-                            dock.restoreGeometry(item.applet_geometry)
-                            # geometry is now handled by main window state
-                            item.applet_geometry = None
+                        mdi_subwindow = dock.parent()
+                        if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
+                            if item.applet_geometry is not None:
+                                geometry = QtCore.QByteArray(item.applet_geometry)
+                                mdi_subwindow.restoreGeometry(geometry)
                 else:
                     dock = item.applet_dock
                     item.applet_dock = None
@@ -570,11 +571,11 @@ class AppletsDock(QtWidgets.QDockWidget):
             raise ValueError
 
     def on_dock_closed(self, item, dock):
-        item.applet_geometry = dock.saveGeometry()
         asyncio.ensure_future(dock.terminate(), loop=self._loop)
         item.setCheckState(0, QtCore.Qt.Unchecked)
         mdi_subwindow = dock.parent()
         if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
+            item.applet_geometry = bytes(mdi_subwindow.saveGeometry())
             mdi_subwindow.close()
 
     def get_untitled(self):
@@ -718,9 +719,10 @@ class AppletsDock(QtWidgets.QDockWidget):
                 enabled = cwi.checkState(0) == QtCore.Qt.Checked
                 name = cwi.text(0)
                 spec = self.get_spec(cwi)
+                mdi_subwindow = cwi.applet_dock.parent()
+                if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
+                    cwi.applet_geometry = bytes(mdi_subwindow.saveGeometry())
                 geometry = cwi.applet_geometry
-                if geometry is not None:
-                    geometry = bytes(geometry)
                 state.append(("applet", uid, enabled, name, spec, geometry))
             elif cwi.ty == "group":
                 name = cwi.text(0)
@@ -743,9 +745,7 @@ class AppletsDock(QtWidgets.QDockWidget):
                     raise ValueError("Invalid applet spec type: "
                                      + str(spec["ty"]))
                 item = self.new(uid, name, spec, parent=parent)
-                if geometry is not None:
-                    geometry = QtCore.QByteArray(geometry)
-                    item.applet_geometry = geometry
+                item.applet_geometry = geometry
                 if enabled:
                     item.setCheckState(0, QtCore.Qt.Checked)
             elif wis[0] == "group":
@@ -758,4 +758,3 @@ class AppletsDock(QtWidgets.QDockWidget):
 
     def restore_state(self, state):
         QtCore.QTimer.singleShot(0, partial(self.restore_state_item, state, None))
-
