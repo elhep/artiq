@@ -746,7 +746,11 @@ class AppletsDock(QtWidgets.QDockWidget):
     def restore_state_item(self, state, parent):
         for wis in state:
             if wis[0] == "applet":
-                _, uid, enabled, name, spec, geometry, mdi_area_name = wis
+                if len(wis) == 7:
+                    _, uid, enabled, name, spec, geometry, mdi_area_name = wis
+                else:
+                    _, uid, enabled, name, spec, geometry = wis
+                    mdi_area_name = None
                 if spec["ty"] not in {"command", "code"}:
                     raise ValueError("Invalid applet spec type: "
                                      + str(spec["ty"]))
