@@ -530,9 +530,12 @@ class AppletsDock(QtWidgets.QDockWidget):
         dock.sigClosed.connect(partial(self.on_dock_closed, item, dock))
         mdi_subwindow = QtWidgets.QMdiSubWindow()
         mdi_subwindow.setWidget(dock)
-        mdi_area = self.main_window.centralWidget().currentWidget()
-        if mdi_area is not None:
-            mdi_area.addSubWindow(mdi_subwindow)
+        if item.mdi_area_name is None:
+            mdi_area = self.main_window.centralWidget().currentWidget()
+            item.mdi_area_name = mdi_area.tab_name
+        else:
+            mdi_area = self.main_window.get_mdi_area_by_name(item.mdi_area_name)
+        mdi_area.addSubWindow(mdi_subwindow)
         mdi_subwindow.show()
         return dock
 
@@ -573,6 +576,7 @@ class AppletsDock(QtWidgets.QDockWidget):
     def on_dock_closed(self, item, dock):
         asyncio.ensure_future(dock.terminate(), loop=self._loop)
         item.setCheckState(0, QtCore.Qt.Unchecked)
+        item.mdi_area_name = None
         mdi_subwindow = dock.parent()
         if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
             item.applet_geometry = bytes(mdi_subwindow.saveGeometry())
@@ -616,6 +620,7 @@ class AppletsDock(QtWidgets.QDockWidget):
         item.applet_uid = uid
         item.applet_dock = None
         item.applet_geometry = None
+        item.mdi_area_name = None
         item.setIcon(0, QtWidgets.QApplication.style().standardIcon(
             QtWidgets.QStyle.SP_ComputerIcon))
         self.set_spec(item, spec)
@@ -723,7 +728,8 @@ class AppletsDock(QtWidgets.QDockWidget):
                 if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
                     cwi.applet_geometry = bytes(mdi_subwindow.saveGeometry())
                 geometry = cwi.applet_geometry
-                state.append(("applet", uid, enabled, name, spec, geometry))
+                mdi_area_name = cwi.mdi_area_name
+                state.append(("applet", uid, enabled, name, spec, geometry, mdi_area_name))
             elif cwi.ty == "group":
                 name = cwi.text(0)
                 attr = cwi.text(1)
@@ -740,12 +746,13 @@ class AppletsDock(QtWidgets.QDockWidget):
     def restore_state_item(self, state, parent):
         for wis in state:
             if wis[0] == "applet":
-                _, uid, enabled, name, spec, geometry = wis
+                _, uid, enabled, name, spec, geometry, mdi_area_name = wis
                 if spec["ty"] not in {"command", "code"}:
                     raise ValueError("Invalid applet spec type: "
                                      + str(spec["ty"]))
                 item = self.new(uid, name, spec, parent=parent)
                 item.applet_geometry = geometry
+                item.mdi_area_name = mdi_area_name
                 if enabled:
                     item.setCheckState(0, QtCore.Qt.Checked)
             elif wis[0] == "group":
