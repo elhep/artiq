@@ -246,12 +246,8 @@ class BooleanEntry(QtWidgets.QCheckBox):
         self.setChecked(argument["state"])
         self.procdesc = argument["desc"]
         def update(checked):
-            default_value = BooleanEntry.default_state(self.procdesc)
-            if bool(checked) != default_value:
-                self.modifiedValue.emit(True)
-            else:
-                self.modifiedValue.emit(False)
             argument["state"] = bool(checked)
+            self.modifiedValue.emit(not self.is_default())
         self.stateChanged.connect(update)
 
     def is_default(self):
@@ -302,12 +298,8 @@ class EnumerationEntry(QtWidgets.QWidget):
             layout.addWidget(self.combo_box)
 
             def update(index):
-                default_value = EnumerationEntry.default_state(self.procdesc)
-                if index != default_value:
-                    self.modifiedValue.emit(True)
-                else:
-                    self.modifiedValue.emit(False)
                 argument["state"] = choices[index]
+                self.modifiedValue.emit(not self.is_default())
             self.combo_box.currentIndexChanged.connect(update)
 
     def is_default(self):
@@ -350,12 +342,8 @@ class NumberEntryInt(QtWidgets.QSpinBox):
 
         self.setValue(argument["state"])
         def update(value):
-            default_value = NumberEntryInt.default_state(self.procdesc)
-            if value != default_value:
-                self.modifiedValue.emit(True)
-            else:
-                self.modifiedValue.emit(False)
             argument["state"] = value
+            self.modifiedValue.emit(not self.is_default())
         self.valueChanged.connect(update)
 
     def is_default(self):
@@ -413,12 +401,8 @@ class NumberEntryFloat(ScientificSpinBox):
 
         self.setValue(argument["state"]/scale)
         def update(value):
-            default_value = NumberEntryFloat.default_state(self.procdesc)
-            if value*scale != default_value:
-                self.modifiedValue.emit(True)
-            else:
-                self.modifiedValue.emit(False)
             argument["state"] = value*scale
+            self.modifiedValue.emit(not self.is_default())
         self.valueChanged.connect(update)
 
     def is_default(self):
