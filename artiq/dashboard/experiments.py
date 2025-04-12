@@ -200,8 +200,14 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
     def _create_due_date_widgets(self):
         datetime = QtWidgets.QDateTimeEdit()
         datetime.setDisplayFormat("MMM d yyyy hh:mm:ss")
-        datetime_en = QtWidgets.QCheckBox("Due date:")
-        self.foldable_layout.addWidget(datetime_en, 1, 0)
+        composite_widget = QtWidgets.QWidget()
+        composite_layout = QtWidgets.QHBoxLayout(composite_widget)
+        composite_layout.setContentsMargins(0, 0, 0, 0)
+        datetime_en = QtWidgets.QCheckBox()
+        due_date_label = QtWidgets.QLabel("Due date:")
+        composite_layout.addWidget(datetime_en)
+        composite_layout.addWidget(due_date_label)
+        self.foldable_layout.addWidget(composite_widget, 1, 0)
         self.foldable_layout.addWidget(datetime, 1, 1)
 
         if self.scheduling["due_date"] is None:
@@ -219,43 +225,97 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         def update_datetime_en(checked):
             if checked:
                 due_date = datetime.dateTime().toMSecsSinceEpoch() / 1000
+                # There is some inconsistency here. We should read the default
+                # value, but there is only default value of the 'Due date',
+                # which is None. That means that the checkbox should be
+                # un-checked. We could check here if the default value is None
+                # or not, bot even if it was not None, it wouldn't necessary
+                # mean that the checkboax should be checked. We allow here
+                # hardcoded default value 'un-checked'.
+                due_date_label.setStyleSheet("background-color: grey;")
+                logger.warning("Using 'Due date' value - non-default behaviour")
             else:
                 due_date = None
+                due_date_label.setStyleSheet("background-color: transparent;")
             self.scheduling["due_date"] = due_date
+        update_datetime_en(datetime_en.isChecked())
         datetime_en.stateChanged.connect(update_datetime_en)
 
     def _create_pipeline_widgets(self):
+        self.pipeline_widget_name = QtWidgets.QLabel("Pipeline:")
         self.pipeline_name = QtWidgets.QLineEdit()
-        self.foldable_layout.addWidget(QtWidgets.QLabel("Pipeline:"), 1, 2)
+        self.foldable_layout.addWidget(self.pipeline_widget_name, 1, 2)
         self.foldable_layout.addWidget(self.pipeline_name, 1, 3)
 
         self.pipeline_name.setText(self.scheduling["pipeline_name"])
+        scheduling_defaults = self.manager.get_submission_scheduling_defaults()
+        self.pipeline_default_value = scheduling_defaults["pipeline_name"]
 
         def update_pipeline_name(text):
             self.scheduling["pipeline_name"] = text
+            if text != self.pipeline_default_value:
+                self.pipeline_widget_name.setStyleSheet(
+                        "background-color: grey;")
+                logger.warning("Changing pipeline name to non-default value")
+            else:
+                self.pipeline_widget_name.setStyleSheet(
+                        "background-color: transparent;")
+        # Make sure that non-default values are notified
+        update_pipeline_name(self.scheduling["pipeline_name"])
+
         self.pipeline_name.textChanged.connect(update_pipeline_name)
 
     def _create_priority_widgets(self):
+        self.priority_widget_name = QtWidgets.QLabel("Priority:")
         self.priority = QtWidgets.QSpinBox()
         self.priority.setRange(-99, 99)
-        self.foldable_layout.addWidget(QtWidgets.QLabel("Priority:"), 2, 0)
+        self.foldable_layout.addWidget(self.priority_widget_name, 2, 0)
         self.foldable_layout.addWidget(self.priority, 2, 1)
         self.priority.setValue(self.scheduling["priority"])
+        scheduling_defaults = self.manager.get_submission_scheduling_defaults()
+        self.priority_default_value = scheduling_defaults["priority"]
 
         def update_priority(value):
             self.scheduling["priority"] = value
+            if value != self.priority_default_value:
+                self.priority_widget_name.setStyleSheet(
+                        "background-color: grey;")
+                logger.warning("Changing priority to non-default value")
+            else:
+                self.priority_widget_name.setStyleSheet(
+                        "background-color: transparent;")
+        # Make sure that non-default values are notified
+        update_priority(self.scheduling["priority"])
+
         self.priority.valueChanged.connect(update_priority)
 
     def _create_flush_widgets(self):
-        self.flush = QtWidgets.QCheckBox("Flush")
-        self.flush.setToolTip("Flush the pipeline (of current- and higher-priority "
-                              "experiments) before starting the experiment")
-        self.foldable_layout.addWidget(self.flush, 2, 2)
+        composite_widget = QtWidgets.QWidget()
+        composite_layout = QtWidgets.QHBoxLayout(composite_widget)
+        composite_layout.setContentsMargins(0, 0, 0, 0)
+        self.flush = QtWidgets.QCheckBox()
+        flush_label = QtWidgets.QLabel("Flush")
+        composite_widget.setToolTip("Flush the pipeline (of current- and "
+                                    "higher-priority experiments) before "
+                                    "starting the experiment")
+        composite_layout.addWidget(self.flush)
+        composite_layout.addWidget(flush_label)
+        self.foldable_layout.addWidget(composite_widget, 2, 2)
 
         self.flush.setChecked(self.scheduling["flush"])
+        flush_defaults = self.manager.get_submission_scheduling_defaults()
+        self.flush_default_value = flush_defaults["flush"]
 
         def update_flush(state):
             self.scheduling["flush"] = bool(state)
+            if bool(state) != self.flush_default_value:
+                flush_label.setStyleSheet("background-color: grey;")
+                logger.warning("Changing flush to non-default value")
+            else:
+                flush_label.setStyleSheet("background-color: transparent;")
+        # Make sure that non-default values are notified
+        update_flush(self.scheduling["flush"])
+
         self.flush.stateChanged.connect(update_flush)
 
     def _create_devarg_override_widgets(self):
@@ -318,7 +378,7 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         self.submit.setToolTip("Schedule the experiment (Ctrl+Return)")
         self.submit.setShortcut("CTRL+RETURN")
         self.submit.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                             QtWidgets.QSizePolicy.Expanding)
+                                  QtWidgets.QSizePolicy.Expanding)
         self.submit.setMaximumHeight(25)
         self.submit.setMinimumWidth(175)
         self.always_visible_layout.addWidget(self.submit)
@@ -591,17 +651,21 @@ class ExperimentManager:
             logger.warning("Ignoring unknown argument UI '%s'", ui_name)
         return _ArgumentEditor
 
+    def get_submission_scheduling_defaults(self):
+        scheduling = {
+            "pipeline_name": "main",
+            "priority": 0,
+            "due_date": None,
+            "flush": False
+        }
+        return scheduling
+
     def get_submission_scheduling(self, expurl):
         if expurl in self.submission_scheduling:
             return self.submission_scheduling[expurl]
         else:
             # mutated by _ExperimentDock
-            scheduling = {
-                "pipeline_name": "main",
-                "priority": 0,
-                "due_date": None,
-                "flush": False
-            }
+            scheduling = self.get_submission_scheduling_defaults()
             if expurl[:5] == "repo:":
                 scheduling.update(self.explist[expurl[5:]]["scheduler_defaults"])
             self.submission_scheduling[expurl] = scheduling
