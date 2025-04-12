@@ -9,6 +9,7 @@ import h5py
 
 from sipyco import pyon
 
+from artiq import __artiq_dir__ as artiq_dir
 from artiq.gui.entries import procdesc_to_entry, EntryTreeWidget
 from artiq.gui.fuzzy_select import FuzzySelectWidget
 from artiq.gui.tools import (LayoutWidget, log_level_to_name, get_open_file_name)
@@ -326,10 +327,24 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
         self.devarg_override.insertItem(0, "core:analyze_at_run_end=True")
         self.foldable_layout.addWidget(self.devarg_override, 2, 3)
 
+        icon_svg = QtGui.QIcon(os.path.join(artiq_dir, "gui", "pencil.svg"))
+        line_edit = self.devarg_override.lineEdit()
+        self._devarg_override_icon_action = line_edit.addAction(
+                icon_svg,
+                QtWidgets.QLineEdit.LeadingPosition)
+        self._devarg_override_icon_action.setVisible(False)
+
         self.devarg_override.setCurrentText(self.options["devarg_override"])
+        scheduling_options = self.manager.get_submission_options_defaults()
 
         def update_devarg_override(text):
             self.options["devarg_override"] = text
+            if self.options["devarg_override"] != scheduling_options["devarg_override"]:
+                self._devarg_override_icon_action.setVisible(True)
+                logger.warning("Changing devarg override to non-default value")
+            else:
+                self._devarg_override_icon_action.setVisible(False)
+        update_devarg_override(self.options["devarg_override"])
         self.devarg_override.editTextChanged.connect(update_devarg_override)
 
     def _create_log_level_widgets(self):
