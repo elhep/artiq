@@ -344,9 +344,17 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
 
         self.log_level.setCurrentIndex(log_levels.index(
             log_level_to_name(self.options["log_level"])))
+        scheduling_options = self.manager.get_submission_options_defaults()
 
         def update_log_level(index):
             self.options["log_level"] = getattr(logging, self.log_level.currentText())
+            if self.options["log_level"] != scheduling_options["log_level"]:
+                self.log_level_label.setStyleSheet("background-color: grey;")
+                logger.warning("Changing log_level to non-default value")
+            else:
+                self.log_level_label.setStyleSheet("background-color: transparent;")
+        # Make sure that non-default values are notified
+        update_log_level(self.options["log_level"])
         self.log_level.currentIndexChanged.connect(update_log_level)
 
     def _create_repo_rev_widgets(self):
@@ -671,15 +679,19 @@ class ExperimentManager:
             self.submission_scheduling[expurl] = scheduling
             return scheduling
 
+    def get_submission_options_defaults(self):
+        options = {
+            "log_level": logging.WARNING,
+            "devarg_override": ""
+        }
+        return options
+
     def get_submission_options(self, expurl):
         if expurl in self.submission_options:
             return self.submission_options[expurl]
         else:
             # mutated by _ExperimentDock
-            options = {
-                "log_level": logging.WARNING,
-                "devarg_override": ""
-            }
+            options = self.get_submission_options_defaults()
             if expurl[:5] == "repo:":
                 options["repo_rev"] = None
             self.submission_options[expurl] = options
