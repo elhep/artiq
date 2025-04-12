@@ -371,12 +371,22 @@ class _ExperimentDock(QtWidgets.QMdiSubWindow):
 
             if self.options["repo_rev"] is not None:
                 self.repo_rev.setText(self.options["repo_rev"])
+            scheduling_options = self.manager.get_submission_options_defaults()
 
             def update_repo_rev(text):
                 if text:
                     self.options["repo_rev"] = text
                 else:
                     self.options["repo_rev"] = None
+                if self.options["repo_rev"] != scheduling_options["repo_rev"]:
+                    self.repo_rev_label.setStyleSheet(
+                            "background-color: grey;")
+                    logger.warning("Changing 'Rev / ref' to non-default value")
+                else:
+                    self.repo_rev_label.setStyleSheet(
+                            "background-color: transparent;")
+            update_repo_rev(self.options["repo_rev"])
+
             self.repo_rev.textChanged.connect(update_repo_rev)
 
     def _create_submit_widgets(self):
@@ -682,7 +692,8 @@ class ExperimentManager:
     def get_submission_options_defaults(self):
         options = {
             "log_level": logging.WARNING,
-            "devarg_override": ""
+            "devarg_override": "",
+            "repo_rev": None
         }
         return options
 
@@ -693,7 +704,7 @@ class ExperimentManager:
             # mutated by _ExperimentDock
             options = self.get_submission_options_defaults()
             if expurl[:5] == "repo:":
-                options["repo_rev"] = None
+                options["repo_rev"] = options["repo_rev"]
             self.submission_options[expurl] = options
             return options
 
