@@ -89,7 +89,7 @@ class Browser(QtWidgets.QMainWindow):
         smgr.register(self.datasets)
         self.files.metadata_changed.connect(self.datasets.metadata_changed)
 
-        self.log = log.LogDock(None, "log")
+        self.log = log.LogDock(None, "log", self)
         smgr.register(self.log)
         self.log.setFeatures(self.log.DockWidgetMovable |
                              self.log.DockWidgetFloatable)

@@ -198,10 +198,14 @@ class _Model(QtCore.QAbstractItemModel):
 
 
 class LogDock(QDockWidgetCloseDetect):
-    def __init__(self, manager, name):
+    def __init__(self, manager, name, main_window=None):
         QDockWidgetCloseDetect.__init__(self, "")
         self.setObjectName(name)
-        self.main_window = manager.main_window  # store a reference to the main window
+
+        if main_window:
+            self.main_window = main_window
+        else:
+            self.main_window = manager.main_window
 
         grid = LayoutWidget()
         self.setWidget(grid)
