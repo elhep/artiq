@@ -1,7 +1,7 @@
 {
   description = "A leading-edge control system for quantum information experiments";
 
-  inputs.nixpkgs.url = github:NixOS/nixpkgs/nixos-24.05;
+  inputs.nixpkgs.url = github:NixOS/nixpkgs/nixos-24.11;
   inputs.mozilla-overlay = { url = github:mozilla/nixpkgs-mozilla; flake = false; };
   inputs.sipyco.url = github:m-labs/sipyco;
   inputs.sipyco.inputs.nixpkgs.follows = "nixpkgs";
@@ -23,6 +23,11 @@
       artiqVersionId = self.sourceInfo.shortRev or "unknown";
       artiqVersion = (builtins.toString artiqVersionMajor) + "." + (builtins.toString artiqVersionMinor) + "+" + artiqVersionId;
       artiqRev = self.sourceInfo.rev or "unknown";
+
+      qtPaths = {
+        QT_PLUGIN_PATH = "${pkgs.qt5.qtbase}/${pkgs.qt5.qtbase.dev.qtPluginPrefix}:${pkgs.qt5.qtsvg.bin}/${pkgs.qt5.qtbase.dev.qtPluginPrefix}";
+        QML2_IMPORT_PATH = "${pkgs.qt5.qtbase}/${pkgs.qt5.qtbase.dev.qtQmlPrefix}";
+      };
 
       rustManifest = pkgs.fetchurl {
         url = "https://static.rust-lang.org/dist/2021-09-01/channel-rust-nightly.toml";
@@ -84,7 +89,7 @@
           sha256 = "sha256-DAzmobw+c29Pt/URGO3bWXHBxgu9bDHhdTUBE9QJDe4=";
         };
         propagatedBuildInputs = [ pkgs.python3Packages.pyqt5 ];
-        nativeCheckInputs = [ pkgs.python3Packages.pytest-runner pkgs.python3Packages.pytestCheckHook ];
+        nativeCheckInputs = [ pkgs.python3Packages.pytestCheckHook ];
         disabledTestPaths = [ "tests/test_qeventloop.py" ];
       };
 
@@ -108,12 +113,12 @@
 
       llvmlite-new = pkgs.python3Packages.buildPythonPackage rec {
         pname = "llvmlite";
-        version = "0.43.0";
+        version = "0.44.0";
         src = pkgs.fetchFromGitHub {
             owner = "numba";
             repo = "llvmlite";
             rev = "v${version}";
-            sha256 = "sha256-5QBSRDb28Bui9IOhGofj+c7Rk7J5fNv5nPksEPY/O5o=";
+            sha256 = "sha256-ZIA/JfK9ZP00Zn6SZuPus30Xw10hn3DArHCkzBZAUV0=";
           };
         nativeBuildInputs = [ pkgs.llvm_15 ];
         # Disable static linking
@@ -192,12 +197,13 @@
 
       asyncserial = pkgs.python3Packages.buildPythonPackage rec {
         pname = "asyncserial";
-        version = "0.1";
+        version = "1.0";
         src = pkgs.fetchFromGitHub {
           owner = "m-labs";
           repo = "asyncserial";
-          rev = "d95bc1d6c791b0e9785935d2f62f628eb5cdf98d";
-          sha256 = "0yzkka9jk3612v8gx748x6ziwykq5lr7zmr9wzkcls0v2yilqx9k";
+          rev = version;
+          sha256 = "sha256-ZHzgJnbsDVxVcp09LXq9JZp46+dorgdP8bAiTB59K28=";
+
         };
         propagatedBuildInputs = [ pkgs.python3Packages.pyserial ];
       };
@@ -316,7 +322,7 @@
         inherit (pkgs.texlive)
           scheme-basic latexmk cmap collection-fontsrecommended fncychap
           titlesec tabulary varwidth framed fancyvrb float wrapfig parskip
-          upquote capt-of needspace etoolbox booktabs;
+          upquote capt-of needspace etoolbox booktabs xcolor;
       };
 
       artiq-frontend-dev-wrappers = pkgs.runCommandNoCC "artiq-frontend-dev-wrappers" {}
@@ -389,7 +395,7 @@
         };
       };
 
-      inherit makeArtiqBoardPackage openocd-bscanspi-f;
+      inherit qtPaths makeArtiqBoardPackage openocd-bscanspi-f;
 
       defaultPackage.x86_64-linux = pkgs.python3.withPackages(ps: [ packages.x86_64-linux.artiq ]);
 
@@ -420,8 +426,8 @@
         ];
         shellHook = ''
           export LIBARTIQ_SUPPORT=`libartiq-support`
-          export QT_PLUGIN_PATH=${pkgs.qt5.qtbase}/${pkgs.qt5.qtbase.dev.qtPluginPrefix}:${pkgs.qt5.qtsvg.bin}/${pkgs.qt5.qtbase.dev.qtPluginPrefix}
-          export QML2_IMPORT_PATH=${pkgs.qt5.qtbase}/${pkgs.qt5.qtbase.dev.qtQmlPrefix}
+          export QT_PLUGIN_PATH=${qtPaths.QT_PLUGIN_PATH}
+          export QML2_IMPORT_PATH=${qtPaths.QML2_IMPORT_PATH}
           export PYTHONPATH=`git rev-parse --show-toplevel`:$PYTHONPATH
         '';
       };
@@ -466,7 +472,11 @@
           #__impure = true;     # Nix 2.8+
 
           buildInputs = [
-            (pkgs.python3.withPackages(ps: with packages.x86_64-linux; [ artiq ps.paramiko ]))
+            (pkgs.python3.withPackages(ps: with packages.x86_64-linux; [
+              artiq
+              ps.paramiko
+            ] ++ ps.paramiko.optional-dependencies.ed25519
+            ))
             pkgs.llvm_15
             pkgs.lld_15
             pkgs.openssh

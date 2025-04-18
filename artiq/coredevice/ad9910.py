@@ -195,7 +195,7 @@ class AD9910:
           when changing frequency or phase. The DDS phase is the sum of the
           phase accumulator and the phase offset. The only discontinuous
           changes in the DDS output phase come from changes to the phase
-          offset. This mode is also knows as "relative phase mode".
+          offset. This mode is also known as "relative phase mode".
           :math:`\phi(t) = q(t^\prime) + p + (t - t^\prime) f`
 
         * :const:`PHASE_MODE_ABSOLUTE`: the phase accumulator is reset when
@@ -534,8 +534,16 @@ class AD9910:
         After the SPI transfer, the shared IO update pin is pulsed to
         activate the data.
 
-        .. seealso: :meth:`AD9910.set_phase_mode` for a definition of the different
+        .. seealso:: :meth:`AD9910.set_phase_mode` for a definition of the different
             phase modes.
+
+        .. warning::
+            Deterministic phase control depends on correct alignment of operations
+            to a 4ns grid (``SYNC_CLK``). This function uses :meth:`~artiq.language.core.now_mu()`
+            to ensure such alignment automatically. When replayed over DMA, however, the ensuing
+            event sequence *must* be started at the same offset relative to ``SYNC_CLK``, or
+            unstable ``SYNC_CLK`` cycle assignment (i.e. inconsistent delays of exactly 4ns) will
+            result.
 
         :param ftw: Frequency tuning word: 32-bit.
         :param pow_: Phase tuning word: 16-bit unsigned.

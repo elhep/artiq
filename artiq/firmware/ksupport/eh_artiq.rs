@@ -328,6 +328,7 @@ extern fn stop_fn(_version: c_int,
     }
 }
 
+// Must be kept in sync with `artiq.compiler.embedding`
 static EXCEPTION_ID_LOOKUP: [(&str, u32); 12] = [
     ("RuntimeError", 0),
     ("RTIOUnderflow", 1),
@@ -340,7 +341,7 @@ static EXCEPTION_ID_LOOKUP: [(&str, u32); 12] = [
     ("ZeroDivisionError", 8),
     ("IndexError", 9),
     ("UnwrapNoneError", 10),
-    ("SubkernelError", 11)
+    ("SubkernelError", 11),
 ];
 
 pub fn get_exception_id(name: &str) -> u32 {
@@ -350,5 +351,31 @@ pub fn get_exception_id(name: &str) -> u32 {
         }
     }
     unimplemented!("unallocated internal exception id")
+}
+
+/// Takes as input exception id from host
+/// Generates a new exception with:
+///   * `id` set to `exn_id`
+///   * `message` set to corresponding exception name from `EXCEPTION_ID_LOOKUP`
+///
+/// The message is matched on host to ensure correct exception is being referred 
+/// This test checks the synchronization of exception ids for runtime errors
+#[no_mangle]
+pub extern "C-unwind" fn test_exception_id_sync(exn_id: u32) {
+    let message = EXCEPTION_ID_LOOKUP
+        .iter()
+        .find_map(|&(name, id)| if id == exn_id { Some(name) } else { None })
+        .unwrap_or("unallocated internal exception id");
+    
+    let exn = Exception {
+        id:       exn_id,
+        file:     file!().as_c_slice(),
+        line:     0,
+        column:   0,
+        function: "test_exception_id_sync".as_c_slice(),
+        message:  message.as_c_slice(),
+        param:    [0, 0, 0]
+    };
+    unsafe { raise(&exn) };
 }
 

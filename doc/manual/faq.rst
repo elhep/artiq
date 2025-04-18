@@ -8,7 +8,7 @@ The content of this manual is arranged in rough reading order. If you start at t
 
 **If you are just starting out,** and would like to get ARTIQ set up on your computer and your core device, start with :doc:`installing`, :doc:`flashing`, and :doc:`configuring`, in that order.
 
-**If you have a working ARTIQ setup** (or someone else has set it up for you), start with the tutorials: read :doc:`rtio`, then progress to :doc:`getting_started_core` and :doc:`getting_started_mgmt`. If your system is in a DRTIO configuration, :doc:`DRTIO and subkernels <using_drtio_subkernels>` will also be helpful.
+**If you have a working ARTIQ setup** (or someone else has set it up for you), start with the tutorials: read :doc:`rtio`, then progress to :doc:`getting_started_core`, :doc:`getting_started_mgmt`, and :doc:`using_data_interfaces`. If your system is in a DRTIO configuration, :doc:`DRTIO and subkernels <using_drtio_subkernels>` will also be helpful.
 
 Pages like :doc:`management_system` and :doc:`core_device` describe **specific components of the ARTIQ ecosystem** in more detail. If you want to understand more about device and dataset databases, for example, read the :doc:`environment` page; if you want to understand the ARTIQ Python dialect and everything it does or does not support, read the :doc:`compiler` page.
 
@@ -27,6 +27,21 @@ Substitute ``artiq-manual-pdf`` to get the LaTeX PDF version. The results will b
 
 The manual is written in `reStructured Text <https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html>`_; you can find the source files in the ARTIQ repository under ``doc/manual``. If you spot a mistake, a typo, or something that's out of date or missing -- in particular, if you want to add something to this FAQ -- feel free to clone the repository, edit the source RST files, and make a pull request with your version of an improvement. (If you're not a fan of or not familiar with command-line Git, both GitHub and Gitea support making edits and pull requests directly in the web interface; tutorial materials are easy to find online.) The second best thing is to open an issue to make M-Labs aware of the problem.
 
+roll back to older versions of ARTIQ, or obtain it through other installation methods?
+--------------------------------------------------------------------------------------
+
+At all times, three versions of ARTIQ are actively supported by M-Labs, released through the beta, stable, and legacy channels. See :doc:`releases`.
+
+If you are trying to rollback to stable or legacy, the process should be accordingly simple. See the respective :doc:`installing` page in the respective version of the manual. If you've previously used the version you are rolling back to, you can likely use the rollback methods described in :ref:`installing-upgrading`; otherwise you can always treat it as a fresh install. Remember that it will also be necessary to reflash core devices with corresponding legacy binaries.
+
+Regarding pre-legacy releases, note that being actively supported simply means that M-Labs makes prebuilt packages and binaries for these versions available via the supported installation methods and through AFWS. Outdated versions aren't automatically built or offered over these channels, but their source code remains available in the Git repository, and you are free to use it or adapt it in accordance with the terms of the license, including building whatever packages you prefer. In general, though, newer releases of ARTIQ offer more features, more stability, better performance, and better support. The legacy release is supported simply as a convenience for users who haven't been able to upgrade yet. For normal purposes, it is recommended to use the current stable release of ARTIQ if at all possible, or the beta to gain access to new features and improvements that are still in development.
+
+For more details, see also `Clarifications regarding the ARTIQ release model and AFWS <https://forum.m-labs.hk/d/823-clarifications-regarding-the-artiq-release-model-and-afws>`_.
+
+.. tip::
+
+    If you're particularly concerned with being able to precisely reproduce older experiments, even when you've moved on to newer ARTIQ versions, upgrade carefully and make your own local backups to be able to rollback to older versions of your system. Make sure to keep copies of older firmware binaries in order to be able to reflash your hardware. Older versions of ARTIQ will always continue working if left untouched, and you won't need to worry about rebuilding from the source if you keep your own prebuilt versions around.
+
 .. _faq-networking:
 
 troubleshoot networking problems?
@@ -42,7 +57,8 @@ Diagnosis aids:
 Some things to consider:
 
     - Is the ``core_addr`` field of your ``device_db.py`` set correctly?
-    - Are your core device's IP address and networking configurations definitely set correctly? Check the UART log for evidence of this, and talk to your network administrator about what the correct choices are.
+    - Did your device flash and boot successfully? Were the binaries generated for the correct board hardware version?
+    - Are your core device's IP address and networking configurations definitely set correctly? Check the UART log to confirm, and talk to your network administrator about what the correct choices are.
     - Is your core device configured for an external reference clock? If so, it cannot function correctly without one. Is the external reference clock plugged in?
     - Are Ethernet and (on Kasli only) SFP0 plugged in all the way? Are they working? Try different cables and SFP adapters; M-Labs tests with CAT6 cables, but lower categories should be supported too.
     - Are your PC and your crate in the same subnet?
@@ -71,6 +87,27 @@ Currently, it is not possible to reach satellites through ``artiq_coremgmt confi
 
 Don't worry about individually flashing idle or startup kernels. If your idle or startup kernel contains subkernels, it will automatically compile as a ``.tar``, which you only need to flash to the master.
 
+fix unreliable DRTIO master-satellite links?
+--------------------------------------------
+
+Inconsistent DRTIO connections, especially with odd or absent errors in the core logs, are often a symptom of overheating either in the master or satellite boards. Check the core device fans for failure or defects. Improve air circulation around the crate or attach additional fans to see if that improves or resolves the issue. In the long term, fan trays to be rack-mounted together with the crate are a clean solution to these kinds of problems.
+
+add or remove EEM peripherals or DRTIO satellites?
+--------------------------------------------------
+
+Adding new real-time hardware to an ARTIQ system almost always means reflashing the core device; if you are adding new satellite core devices, they will have to be flashed as well. If you have obtained your upgrades from M-Labs or QUARTIQ, updated binaries and reflashing support will normally be offered to you directly. In any other case, track down your JSON system description file(s), bring them up to date with the updated state of your system, and see :doc:`building_developing`.
+
+Once you have an updated set of binaries, reflash the core device, following the instructions in :doc:`flashing`. Be sure to update your device database before starting experimentation; run :mod:`~artiq.frontend.artiq_ddb_template` on your system description(s) to update the local devices, and copy over any aliases or entries for NDSP controllers you may have been using. Note that the device database is a Python file, and the generated file of local devices can also simply be imported into the final version, allowing for dynamic modifications, especially in complex systems that may have multiple device databases in use.
+
+see command-line help?
+----------------------
+
+Like most if not almost all terminal utilities, ARTIQ commands, tools and applets print their help messages directly into the terminal and exit when run with the flag ``--help`` or ``-h``: ::
+
+    $ artiq_run -h
+
+This is the simplest and most direct way of accessing the same usage and reference material that is replicated in this manual on the pages :doc:`main_frontend_tools` and :doc:`utilities`.
+
 .. _faq-find-examples:
 
 find ARTIQ examples?
@@ -80,9 +117,53 @@ The official examples are stored in the ``examples`` folder of the ARTIQ package
 
   python3 -c "import artiq; print(artiq.__path__[0])"
 
-Copy the ``examples`` folder from that path into your home or user directory, and start experimenting!
+Copy the ``examples`` folder from that path into your home or user directory, and start experimenting! (Note that some examples have dependencies not included with a standard ARTIQ install, like matplotlib and numba. To run those examples properly, make sure those modules are accessible.)
 
 If you have progressed past this level and would like to see more in-depth code or real-life examples of how other groups have handled running experiments with ARTIQ, see the "Community code" directory on the M-labs `resources page <https://m-labs.hk/experiment-control/resources/>`_.
+
+fix ``failed to connect to moninj`` in the dashboard?
+-----------------------------------------------------
+
+This and other similar messages almost always indicate that your device database lists controllers (for example, ``aqctl_moninj_proxy``) that either haven't been started or aren't reachable at the given host and port. See :ref:`mgmt-ctlmgr`, or simply run: ::
+
+    $ artiq_ctlmgr
+
+to let the controller manager start the necessary controllers automatically.
+
+fix ``address already in use`` when running ARTIQ commands?
+-----------------------------------------------------------
+
+A message like ``OSError: [Errno 98] error while attempting to bind on address ('127.0.0.1', 1067): [errno 98] address already in use`` indicates that the IP address and port number combination you're trying to use is already occupied by some other process. Often this simply means that the ARTIQ process you're trying to start is in fact already running. Note for example that trying to start a controller which is already being run by a controller manager will generally fail for this reason.
+
+.. note::
+    ARTIQ management system communications, whether distributed or local, run over TCP/IP, using TCP port numbers to identify their destinations. Generally speaking, client processes like the dashboard don't require fixed ports of their own, since they can simply reach out to the master when they want to establish a connection. Running multiple dashboards will never cause a port conflict. On the other hand, server processes like the ARTIQ master have to be 'listening' at a fixed, open port in order to be able to receive incoming connections. For more details, look into `ports in computer networking <https://en.wikipedia.org/wiki/Port_(computer_networking)>`_.
+
+    Most management system processes belong to the second category, and are bound to one or several fixed communication ports while they're running. See also :doc:`default_network_ports`.
+
+You can use the command ``netstat`` to list the ports currently in use on your system. To check the status of a specific port on Linux, try either of: ::
+
+    $ netstat -anp --inet | grep "<port-number>"
+    $ lsof -i:<port-number>
+
+On Windows, you can list ports with: ::
+
+    $ netstat -ano -p TCP
+
+Use your preferred method to search through the output; suitable commands will vary by environment (e.g. ``grep`` in an MSYS2 shell, ``Select-String`` in PowerShell, ``find`` in the Windows command line, etc.)
+
+In all cases, if there are no results, the port isn't in use and should be free for new processes.
+
+.. tip::
+    While it is possible to run, for example, two identical ARTIQ controllers on the same machine, they can't be bound to the same port numbers at the same time. If you're intentionally running multiple copies of the same ARTIQ processes, use the command-line ``--port`` options to set alternate ports for at least one of the two. See :doc:`main_frontend_tools` and :doc:`utilities` for exact flags to use. Controllers should have similar flags available and will also require updated :ref:`device database entries <ndsp-integration>`. Note that alternate ports must be consistent to be useful, e.g., a master and dashboard must have the same ``--port-notify`` set in order to communicate with each other!
+
+Otherwise, either the running process must be stopped, or you'll have to set different port numbers for the process you're trying to start. In some cases it might happen that a process is no longer accessible or has become unresponsive but is still occupying its ports. The easiest way to free the ports is to kill the process manually. On Linux, you can use the ``kill`` command with ``lsof``: ::
+
+    $ kill $(lsof -t -i:<port-number>)
+
+On Windows, use ``netstat`` again to identify the process ID, and then feed it into ``taskkill``, e.g.: ::
+
+    $ netstat -ano -p TCP
+    $ taskkill /F /PID <process-ID>
 
 diagnose and fix sequence errors?
 ---------------------------------
@@ -129,10 +210,24 @@ In most cases, as in this one, it's relatively easy to rearrange the generation 
 
 In this case, the :meth:`~artiq.coredevice.ttl.TTLInOut.pulse` is split up into its component :meth:`~artiq.coredevice.ttl.TTLInOut.on` and  :meth:`~artiq.coredevice.ttl.TTLInOut.off` so that events can be generated more linearly. It can also be worth keeping in mind that delaying by even a single coarse RTIO cycle between events avoids switching SED lanes at all; in contexts where perfect simultaneity is not a priority, this is an easy way to avoid sequencing issues. See again :ref:`sequence-errors`.
 
+understand applet commands?
+---------------------------
+
+The 'Command' field contains the exact terminal command used to open and operate the applet. The default ``${artiq_applet}`` prefix simply translates to something to the effect of ``python -m artiq.applets.``, intended to be immediately followed by the applet module name. The options suffixed after the module name are the same used in the command line, and a list of them can be shown by using the standard command line ``-h`` help flag: ::
+
+    $ python -m artiq.applets.plot_xy -h
+
+in any terminal.
+
 organize datasets in folders?
 -----------------------------
 
 Use the dot (".") in dataset names to separate folders. The GUI will automatically create and delete folders in the dataset tree display.
+
+organize applets in groups?
+---------------------------
+
+Create groups by left-clicking within the applet list and selecting 'New Group'. Move applets in and out of groups by dragging them with the mouse. To unselect an applet or a group, use CTRL+click.
 
 organize experiment windows in the dashboard?
 ---------------------------------------------
@@ -144,10 +239,33 @@ Experiment windows can be organized by using the following hotkeys:
 
 The windows will be organized in the order they were last interacted with.
 
+fix errors when restarting management system after a crash?
+-----------------------------------------------------------
+
+On Windows in particular, abnormal shutdowns such as power outages or bluescreens sometimes corrupt the organizational files used by the management system, resulting in errors to the tune of ``ValueError: source code string cannot contain null bytes`` when restarting. The easiest way to handle these problems is to delete the corrupted files and start from scratch. Note that GUI configuration ``.pyon`` files are kept in the user configuration directory, see below at :ref:`gui-config-files`
+
 create and use variable-length arrays in kernels?
 -------------------------------------------------
 
 You can't, in general; see the corresponding notes under :ref:`compiler-types`. ARTIQ kernels do not support heap allocation, meaning in particular that lists, arrays, and strings must be of constant size. One option is to preallocate everything, as mentioned on the Compiler page; another option is to chunk it and e.g. read 100 events per function call, push them upstream and retry until the gate time closes.
+
+understand how best to send data between kernel and host?
+---------------------------------------------------------
+
+See also :ref:`basic-artiq-python`. Let's run down the options for kernel-host data transfer:
+
+    - Kernels can return single values directly. They *cannot* return lists, arrays or strings, because of the way these values are allocated, which prevents values of these types from outliving the kernel they are created in. This is still true when the values in question are wrapped in functions or objects, in which case they may be missed by lifetime tracking and accepted by the compiler, but will cause memory corruption when run.
+
+    - Kernels can freely make changes to attributes of objects shared with the host, including ``self``. However, these changes will be made to a kernel-owned copy of the object, which is only synchronized with the host copy when the kernel completes. This means that host-side operations executed during the runtime of the kernel, including RPCs, will be handling an unmodified version of the object, and modifications made by those operations will simply be overwritten when the kernel returns.
+
+    .. note::
+        Attribute writeback happens *once per kernel*, that is, if your experiment contains many separate kernels called from the host, modifications will be written back when each separate kernel completes. This is generally not suitable for data transfer, however, as new kernels are costly to create, and experiments often try to avoid doing so. It is also important to specify that kernels called *from* a kernel will not write back to the host upon completion. Attribute writeback is only executed upon return to the host.
+
+    - Kernels can interact with datasets, either as attributes (if :meth:`~artiq.language.environment.HasEnvironment.setattr_dataset` is used) or by RPC of the get and set methods (:meth:`~artiq.language.environment.HasEnvironment.get_dataset`, :meth:`~artiq.language.environment.HasEnvironment.set_dataset`, etc.). In this case note that, like certain other host-side methods, :meth:`~artiq.language.environment.HasEnvironment.get_dataset` will not actually be accepted by the compiler, because its return type is not specified. To call it as an RPC, simply wrap it in another function which *does* specify a return type. :meth:`~artiq.language.environment.HasEnvironment.set_dataset` can be similarly wrapped to make it asynchronous.
+
+    - Kernels can of course also call arbitrary RPCs. When sending data to the host, these can be asynchronous, and this is normally the recommended way of transferring data back to the host, resulting in a relatively minor amount of delay in the kernel. Keep in mind however that asynchronous RPCs may still block execution for some time if the arguments are very large or if many RPCs are submitted in close succession. When receiving data from the host, RPCs must be synchronous, which is still considerably faster than starting a new kernel. Note that if data is being both (asynchronously) sent and received, there is a small possibility of minor race conditions (i.e. retrieved data may not yet show updates sent in an earlier RPC).
+
+Kernel attributes and data transfer remain somewhat of an open area of development. Many such developments are or will be implemented in `NAC3 <https://forum.m-labs.hk/d/392-nac3-new-artiq-compiler-3-prealpha-release>`_, the next-generation ARTIQ compiler. The overhead for starting new kernels, which is largely dominated by compile time, should be significantly reduced (NAC3 can be expected to complete compilations 6x - 30x faster than currently).
 
 write part of my experiment as a coroutine/asyncio task/generator?
 ------------------------------------------------------------------
@@ -187,6 +305,8 @@ The core device tests require the following TTL devices and connections:
 * ``loop_clock_in``: any input-capable TTL. Must be physically connected to ``loop_clock_out``.
 
 If TTL devices are missing, the corresponding tests are skipped.
+
+.. _gui-config-files:
 
 find the dashboard and browser configuration files?
 ---------------------------------------------------

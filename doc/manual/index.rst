@@ -24,6 +24,7 @@ ARTIQ manual
     rtio
     getting_started_core
     getting_started_mgmt
+    using_data_interfaces
     using_drtio_subkernels
 
 .. toctree::
@@ -51,10 +52,12 @@ ARTIQ manual
     main_frontend_tools 
     core_language_reference
     core_drivers_reference
+    mgmt_system_reference
     utilities
 
 .. toctree::
     :caption: Addenda
     :maxdepth: 2
 
+    nixos_handbook
     faq

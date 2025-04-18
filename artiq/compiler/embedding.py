@@ -88,18 +88,23 @@ class EmbeddingMap:
                 self.subkernel_message_map[msg_type.name] = msg_id
                 self.object_reverse_map[obj_id] = msg_id
 
-        self.preallocate_runtime_exception_names(["RuntimeError",
-                                                  "RTIOUnderflow",
-                                                  "RTIOOverflow",
-                                                  "RTIODestinationUnreachable",
-                                                  "DMAError",
-                                                  "I2CError",
-                                                  "CacheError",
-                                                  "SPIError",
-                                                  "0:ZeroDivisionError",
-                                                  "0:IndexError",
-                                                  "UnwrapNoneError",
-                                                  "SubkernelError"])
+        # Keep this list of exceptions in sync with `EXCEPTION_ID_LOOKUP` in `artiq::firmware::ksupport::eh_artiq`
+        # The exceptions declared here must be defined in `artiq.coredevice.exceptions`
+        # Verify synchronization by running the test cases in `artiq.test.coredevice.test_exceptions`
+        self.preallocate_runtime_exception_names([
+            "0:RuntimeError",
+            "RTIOUnderflow",
+            "RTIOOverflow",
+            "RTIODestinationUnreachable",
+            "DMAError",
+            "I2CError",
+            "CacheError",
+            "SPIError",
+            "0:ZeroDivisionError",
+            "0:IndexError",
+            "UnwrapNoneError",
+            "SubkernelError",
+        ])
 
     def preallocate_runtime_exception_names(self, names):
         for i, name in enumerate(names):
@@ -294,7 +299,9 @@ class ASTSynthesizer:
         if len(value) > 0:
             v = value[0]
             is_T = True
-            if isinstance(v, int):
+            if isinstance(v, bool):
+                is_T = False
+            elif isinstance(v, int):
                 T = int
             elif isinstance(v, float):
                 T = float
