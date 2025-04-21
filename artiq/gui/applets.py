@@ -478,11 +478,6 @@ class AppletsDock(QtWidgets.QDockWidget):
         delete_action.setShortcutContext(QtCore.Qt.WidgetShortcut)
         delete_action.triggered.connect(self.delete)
         self.table.addAction(delete_action)
-        close_nondocked_action = QtWidgets.QAction("Close non-docked applets", self.table)
-        close_nondocked_action.setShortcut("CTRL+ALT+W")
-        close_nondocked_action.setShortcutContext(QtCore.Qt.ApplicationShortcut)
-        close_nondocked_action.triggered.connect(self.close_nondocked)
-        self.table.addAction(close_nondocked_action)
 
         new_group_action = QtWidgets.QAction("New group", self.table)
         new_group_action.triggered.connect(partial(self.new_with_parent, self.new_group))
@@ -530,10 +525,18 @@ class AppletsDock(QtWidgets.QDockWidget):
 
     def create(self, item, name, spec):
         dock = _AppletDock(self.dataset_sub, self.dataset_ctl, self.expmgr, item.applet_uid, name, spec, self.extra_substitutes)
-        self.main_window.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
-        dock.setFloating(True)
+        dock.setTitleBarWidget(QtWidgets.QWidget())
         asyncio.ensure_future(dock.start(), loop=self._loop)
         dock.sigClosed.connect(partial(self.on_dock_closed, item, dock))
+        mdi_subwindow = QtWidgets.QMdiSubWindow()
+        mdi_subwindow.setWidget(dock)
+        if item.mdi_area_name is None:
+            mdi_area = self.main_window.centralWidget().currentWidget()
+            item.mdi_area_name = mdi_area.tab_name
+        else:
+            mdi_area = self.main_window.get_mdi_area_by_name(item.mdi_area_name)
+        mdi_area.addSubWindow(mdi_subwindow)
+        mdi_subwindow.show()
         return dock
 
     def item_changed(self, item, column):
@@ -553,10 +556,11 @@ class AppletsDock(QtWidgets.QDockWidget):
                         spec = self.get_spec(item)
                         dock = self.create(item, name, spec)
                         item.applet_dock = dock
-                        if item.applet_geometry is not None:
-                            dock.restoreGeometry(item.applet_geometry)
-                            # geometry is now handled by main window state
-                            item.applet_geometry = None
+                        mdi_subwindow = dock.parent()
+                        if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
+                            if item.applet_geometry is not None:
+                                geometry = QtCore.QByteArray(item.applet_geometry)
+                                mdi_subwindow.restoreGeometry(geometry)
                 else:
                     dock = item.applet_dock
                     item.applet_dock = None
@@ -570,9 +574,13 @@ class AppletsDock(QtWidgets.QDockWidget):
             raise ValueError
 
     def on_dock_closed(self, item, dock):
-        item.applet_geometry = dock.saveGeometry()
         asyncio.ensure_future(dock.terminate(), loop=self._loop)
         item.setCheckState(0, QtCore.Qt.Unchecked)
+        item.mdi_area_name = None
+        mdi_subwindow = dock.parent()
+        if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
+            item.applet_geometry = bytes(mdi_subwindow.saveGeometry())
+            mdi_subwindow.close()
 
     def get_untitled(self):
         existing_names = set()
@@ -612,6 +620,7 @@ class AppletsDock(QtWidgets.QDockWidget):
         item.applet_uid = uid
         item.applet_dock = None
         item.applet_geometry = None
+        item.mdi_area_name = None
         item.setIcon(0, QtWidgets.QApplication.style().standardIcon(
             QtWidgets.QStyle.SP_ComputerIcon))
         self.set_spec(item, spec)
@@ -715,10 +724,12 @@ class AppletsDock(QtWidgets.QDockWidget):
                 enabled = cwi.checkState(0) == QtCore.Qt.Checked
                 name = cwi.text(0)
                 spec = self.get_spec(cwi)
+                mdi_subwindow = cwi.applet_dock.parent()
+                if isinstance(mdi_subwindow, QtWidgets.QMdiSubWindow):
+                    cwi.applet_geometry = bytes(mdi_subwindow.saveGeometry())
                 geometry = cwi.applet_geometry
-                if geometry is not None:
-                    geometry = bytes(geometry)
-                state.append(("applet", uid, enabled, name, spec, geometry))
+                mdi_area_name = cwi.mdi_area_name
+                state.append(("applet", uid, enabled, name, spec, geometry, mdi_area_name))
             elif cwi.ty == "group":
                 name = cwi.text(0)
                 attr = cwi.text(1)
@@ -735,14 +746,17 @@ class AppletsDock(QtWidgets.QDockWidget):
     def restore_state_item(self, state, parent):
         for wis in state:
             if wis[0] == "applet":
-                _, uid, enabled, name, spec, geometry = wis
+                if len(wis) == 7:
+                    _, uid, enabled, name, spec, geometry, mdi_area_name = wis
+                else:
+                    _, uid, enabled, name, spec, geometry = wis
+                    mdi_area_name = None
                 if spec["ty"] not in {"command", "code"}:
                     raise ValueError("Invalid applet spec type: "
                                      + str(spec["ty"]))
                 item = self.new(uid, name, spec, parent=parent)
-                if geometry is not None:
-                    geometry = QtCore.QByteArray(geometry)
-                    item.applet_geometry = geometry
+                item.applet_geometry = geometry
+                item.mdi_area_name = mdi_area_name
                 if enabled:
                     item.setCheckState(0, QtCore.Qt.Checked)
             elif wis[0] == "group":
@@ -754,18 +768,4 @@ class AppletsDock(QtWidgets.QDockWidget):
                 raise ValueError("Invalid item state: " + str(wis[0]))
 
     def restore_state(self, state):
-        self.restore_state_item(state, None)
-
-    def close_nondocked(self):
-        def walk(wi):
-            for i in range(wi.childCount()):
-                cwi = wi.child(i)
-                if cwi.ty == "applet":
-                    if cwi.checkState(0) == QtCore.Qt.Checked:
-                        if cwi.applet_dock is not None:
-                            if not cwi.applet_dock.isFloating():
-                                continue
-                        cwi.setCheckState(0, QtCore.Qt.Unchecked)
-                elif cwi.ty == "group":
-                    walk(cwi)
-        walk(self.table.invisibleRootItem())
+        QtCore.QTimer.singleShot(0, partial(self.restore_state_item, state, None))
