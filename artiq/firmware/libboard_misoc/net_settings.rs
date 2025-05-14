@@ -5,7 +5,7 @@ use core::str::FromStr;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address, Ipv4Cidr, Ipv6Address, Ipv6Cidr};
 
 use config;
-#[cfg(soc_platform = "kasli")]
+#[cfg(any(soc_platform = "kasli", soc_platform = "kasli_diot"))]
 use i2c_eeprom;
 
 pub enum Ipv4AddrConfig {
@@ -65,7 +65,7 @@ pub fn get_adresses() -> NetAddresses {
     match config::read_str("mac", |r| r.map(|s| s.parse())) {
         Ok(Ok(addr)) => hardware_addr = addr,
         _ => {
-            #[cfg(soc_platform = "kasli")]
+            #[cfg(any(soc_platform = "kasli", soc_platform = "kasli_diot"))]
             {
                 let eeprom = i2c_eeprom::EEPROM::new();
                 hardware_addr =

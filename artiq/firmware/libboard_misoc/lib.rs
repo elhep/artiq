@@ -38,9 +38,9 @@ pub mod uart_logger;
 #[cfg(all(has_ethmac, feature = "smoltcp"))]
 pub mod ethmac;
 pub mod i2c;
-#[cfg(soc_platform = "kasli")]
+#[cfg(any(soc_platform = "kasli", soc_platform = "kasli_diot"))]
 pub mod i2c_eeprom;
-#[cfg(any(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")), soc_platform = "efc"))]
+#[cfg(any(all(soc_platform = "kasli",any(hw_rev = "v2.0", hw_rev = "v2.1")), soc_platform = "efc", soc_platform = "kasli_diot"))]
 pub mod io_expander;
 #[cfg(all(has_ethmac, feature = "smoltcp"))]
 pub mod net_settings;
