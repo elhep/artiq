@@ -137,6 +137,18 @@
                     "enum": ["v1.0", "v1.1", "v1.2"]
                 }
             }
+        },
+        {
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "const": "kasli_diot"
+                },
+                "hw_rev": {
+                    "type": "string",
+                    "enum": ["v1.0"]
+                }
+            }
         }
     ],
 
@@ -146,7 +158,7 @@
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler", "songbird", "coaxpress_sfp"]
+                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler", "songbird", "coaxpress_sfp", "ohwr_diot_loopback"]
                 },
                 "board": {
                     "type": "string"
@@ -673,16 +685,25 @@
                     "required": ["ports"]
                 }
             },{
+<<<<<<< HEAD
                 "title": "songbird",
                 "if": {
                     "properties": {
                         "type": {
                             "const": "songbird"
+=======
+                "title": "DIOT OHWR Loopback",
+                "if": {
+                    "properties": {
+                        "type": {
+                            "const": "ohwr_diot_loopback"
+>>>>>>> 3ec5d18ba (diot: added CERN Loopback support)
                         }
                     }
                 },
                 "then": {
                     "properties": {
+<<<<<<< HEAD
                         "ports": {
                             "type": "array",
                             "items": {
@@ -720,6 +741,15 @@
                             "description": "Number of ROI engines."
                         }
                     }
+=======
+                        "slot": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 7
+                        }
+                    },
+                    "required": ["slot"]
+>>>>>>> 3ec5d18ba (diot: added CERN Loopback support)
                 }
             }]
         },
