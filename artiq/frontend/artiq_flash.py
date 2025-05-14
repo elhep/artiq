@@ -60,7 +60,7 @@ Prerequisites:
                         help="SSH host to jump through")
     parser.add_argument("-t", "--target", default="kasli",
                         help="target board, default: %(default)s, one of: "
-                             "kasli efc kc705")
+                             "kasli kasli_diot efc kc705")
     parser.add_argument("-I", "--preinit-command", default=[], action="append",
                         help="add a pre-initialization OpenOCD command. "
                              "Useful for selecting a board when several are connected.")
@@ -216,10 +216,26 @@ class ProgrammerXC7(Programmer):
         Programmer.__init__(self, client, preinit_script)
         self._proxy = proxy
 
-        if board != "efc":
+        if board not in ["efc", "kasli_diot"]:
             add_commands(self._board_script,
                 "source {boardfile}",
                 boardfile=self._transfer_script("board/{}.cfg".format(board)))
+        elif board == "kasli_diot":
+            add_commands(self._board_script,
+                "adapter driver ftdi",
+                "ftdi device_desc \"Artix-7 DIOT System Board\"",
+                "ftdi vid_pid 0x0403 0x6011",
+                "ftdi channel 0",
+                "ftdi layout_init 0x0008 0x000b",
+
+                "reset_config none",
+                "transport select jtag",
+                "adapter speed 25000",
+
+                "source [find cpld/xilinx-xc7.cfg]",
+                "source [find cpld/jtagspi.cfg]",
+                "source [find fpga/xilinx-xadc.cfg]",
+                "source [find fpga/xilinx-dna.cfg]")
         else:
             add_commands(self._board_script,
                 # OpenOCD does not have the efc board file so custom script is included.
@@ -261,6 +277,14 @@ def main():
             "bootloader":   ("spi0", 0x400000),
             "storage":      ("spi0", 0x440000),
             "firmware":     ("spi0", 0x450000),
+        },
+        "kasli_diot": {
+            "programmer":   partial(ProgrammerXC7, board="kasli_diot", 
+                                    proxy="bscan_spi_xc7a200t_kasli_diot_1v0.bit"),
+            "gateware":     ("spi0", 0x000000),
+            "bootloader":   ("spi0", 0x600000),
+            "storage":      ("spi0", 0x640000),
+            "firmware":     ("spi0", 0x650000),
         },
         "efc1v0": {
             "programmer":   partial(ProgrammerXC7, board="efc", proxy="bscan_spi_xc7a100t.bit"),
@@ -316,7 +340,7 @@ def main():
             firmware_fbi = fetch_bin(binary_dir, ["satman", "runtime"], args.srcbuild)
             programmer.write_binary(*config["firmware"], firmware_fbi)
         elif action == "load":
-            gateware_bit = artifact_path(binary_dir, "gateware", "top.bit")
+            gateware_bit = artifact_path(binary_dir, "gateware", "top.bit", srcbuild=args.srcbuild)
             programmer.load(gateware_bit, 0)
         elif action == "start":
             programmer.start()

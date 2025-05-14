@@ -269,7 +269,7 @@
     vivado = pkgs.buildFHSEnv {
       name = "vivado";
       targetPkgs = vivadoDeps;
-      profile = "set -e; source /opt/Xilinx/Vivado/2024.2/settings64.sh";
+      profile = "set -e; source /opt/Xilinx/Vivado/2022.2/settings64.sh";
       runScript = "vivado";
     };
 
@@ -338,10 +338,14 @@
       bscan_spi_bitstreams-pkg = pkgs.stdenv.mkDerivation {
         name = "bscan_spi_bitstreams";
         src = pkgs.fetchFromGitHub {
-          owner = "quartiq";
+          owner = "kaolpr";
           repo = "bscan_spi_bitstreams";
-          rev = "01d8f819f15baf9a8cc5d96945a51e4d267ff564";
-          sha256 = "1zqv47kzgvbn4c8cr019a6wcja7gn5h1z4kvw5bhpc72fyhagal9";
+          rev = "7015ccd46f698b2647f69df3caf30aee992bbb9b";
+          sha256 = "VtkfWQCE73pZpRNJljnFVZ3Bo8Tr+ySbFNhSQUurbpg=";
+          # owner = "quartiq";
+          # repo = "bscan_spi_bitstreams";
+          # rev = "01d8f819f15baf9a8cc5d96945a51e4d267ff564";
+          # sha256 = "1zqv47kzgvbn4c8cr019a6wcja7gn5h1z4kvw5bhpc72fyhagal9";
         };
         phases = ["installPhase"];
         installPhase = ''
