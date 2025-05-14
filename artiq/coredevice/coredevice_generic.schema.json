@@ -137,6 +137,18 @@
                     "enum": ["v1.0", "v1.1"]
                 }
             }
+        },
+        {
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "const": "kasli_diot"
+                },
+                "hw_rev": {
+                    "type": "string",
+                    "enum": ["v1.0"]
+                }
+            }
         }
     ],
 
@@ -146,7 +158,8 @@
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler"]
+                    "enum": ["dio", "dio_spi", "urukul", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler",
+                        "ohwr_diot_loopback"]
                 },
                 "board": {
                     "type": "string"
@@ -641,6 +654,25 @@
                         }
                     },
                     "required": ["ports"]
+                }
+            },{
+                "title": "DIOT OHWR Loopback",
+                "if": {
+                    "properties": {
+                        "type": {
+                            "const": "ohwr_diot_loopback"
+                        }
+                    }
+                },
+                "then": {
+                    "properties": {
+                        "slot": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 7
+                        }
+                    },
+                    "required": ["slot"]
                 }
             }]
         }
