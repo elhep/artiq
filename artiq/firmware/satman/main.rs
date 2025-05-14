@@ -22,7 +22,7 @@ use board_misoc::{csr, ident, clock, config, i2c, pmp};
 use board_artiq::si5324;
 #[cfg(has_si549)]
 use board_artiq::si549;
-#[cfg(soc_platform = "kasli")]
+#[cfg(any(soc_platform = "kasli", soc_platform = "kasli_diot"))]
 use board_misoc::irq;
 use board_misoc::{boot, spiflash};
 use board_artiq::{spi, drtioaux, drtio_routing};
@@ -867,7 +867,7 @@ pub extern fn main() -> i32 {
         ALLOC.add_range(&mut _fheap, &mut _eheap);
         pmp::init_stack_guard(&_sstack_guard as *const u8 as usize);
     }
-    #[cfg(soc_platform = "kasli")]
+    #[cfg(any(soc_platform = "kasli", soc_platform = "kasli_diot"))]
     irq::enable_interrupts();
     #[cfg(has_wrpll)]
     irq::enable(csr::WRPLL_INTERRUPT);
@@ -890,9 +890,9 @@ fn startup() {
 
     #[cfg(has_i2c)]
     i2c::init().expect("I2C initialization failed");
-    #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
+    #[cfg(any(soc_platform = "kasli_diot", all(soc_platform = "kasli", hw_rev = "v2.0")))]
     let (mut io_expander0, mut io_expander1);
-    #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
+    #[cfg(any(soc_platform = "kasli_diot", all(soc_platform = "kasli", hw_rev = "v2.0")))]
     {
         io_expander0 = board_misoc::io_expander::IoExpander::new(0).unwrap();
         io_expander1 = board_misoc::io_expander::IoExpander::new(1).unwrap();
@@ -1007,7 +1007,7 @@ fn startup() {
             for rep in repeaters.iter_mut() {
                 rep.service(&routing_table, rank, destination, &mut router);
             }
-            #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
+            #[cfg(any(soc_platform = "kasli_diot", all(soc_platform = "kasli", hw_rev = "v2.0")))]
             {
                 io_expander0.service().expect("I2C I/O expander #0 service failed");
                 io_expander1.service().expect("I2C I/O expander #1 service failed");
@@ -1048,7 +1048,7 @@ fn startup() {
             for rep in repeaters.iter_mut() {
                 rep.service(&routing_table, rank, destination, &mut router);
             }
-            #[cfg(all(soc_platform = "kasli", hw_rev = "v2.0"))]
+            #[cfg(any(soc_platform = "kasli_diot", all(soc_platform = "kasli", hw_rev = "v2.0")))]
             {
                 io_expander0.service().expect("I2C I/O expander #0 service failed");
                 io_expander1.service().expect("I2C I/O expander #1 service failed");

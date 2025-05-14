@@ -3,6 +3,7 @@ use i2c;
 /// [Hardware manual](http://ww1.microchip.com/downloads/en/DeviceDoc/24AA02E48-24AA025E48-24AA02E64-24AA025E64-Data-Sheet-20002124H.pdf)
 pub struct EEPROM {
     busno: u8,
+    #[cfg(soc_platform = "kasli")]
     port: u8,
     address: u8,
 }
@@ -24,7 +25,16 @@ impl EEPROM {
             busno: 0,
             /// SHARED I2C bus
             port: 11,
-            address: 0xae,
+            // For variant with address pins
+            address: 0xa0,
+        }
+    }
+
+    #[cfg(soc_platform = "kasli_diot")]
+    pub fn new() -> Self {
+        EEPROM {
+            busno: 3,
+            address: 0xa0,
         }
     }
 
@@ -37,6 +47,7 @@ impl EEPROM {
     }
 
     pub fn read<'a>(&self, addr: u8, buf: &'a mut [u8]) -> Result<(), i2c::Error> {
+        #[cfg(soc_platform = "kasli")]
         self.select()?;
 
         i2c::start(self.busno)?;

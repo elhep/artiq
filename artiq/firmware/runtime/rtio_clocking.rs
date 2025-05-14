@@ -92,7 +92,7 @@ pub mod crg {
 
 // Si5324 input to select for locking to an external clock (as opposed to
 // a recovered link clock in DRTIO satellites, which is handled elsewhere).
-#[cfg(all(has_si5324, soc_platform = "kasli", hw_rev = "v2.0"))]
+#[cfg(all(has_si5324, any(all(soc_platform = "kasli", hw_rev = "v2.0"), soc_platform = "kasli_diot")))]
 const SI5324_EXT_INPUT: si5324::Input = si5324::Input::Ckin1;
 #[cfg(all(has_si5324, soc_platform = "kasli", not(hw_rev = "v2.0")))]
 const SI5324_EXT_INPUT: si5324::Input = si5324::Input::Ckin2;
