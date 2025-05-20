@@ -3,6 +3,7 @@
 from artiq.language.core import kernel
 from artiq.coredevice import spi2 as spi
 from artiq.coredevice.ad53xx import SPI_AD53XX_CONFIG, AD53xx
+from artiq.coredevice.rtio import rtio_output
 
 _SPI_CS_DAC = 1
 
@@ -25,5 +26,20 @@ class PmtSimChannel:
         self.core = dmgr.get(core)
     
     @kernel
-    def wirte_hit_cal(self, hit, value):
+    def write_hit_cal(self, hit, value):
         self.dac.write_dac(self.hit_dac_ch[hit], value)
+
+
+class PmtSimTrigger:
+
+    def __init__(self, dmgr, channel, core="core"):
+        self.channel = channel
+        self.core = dmgr.get(core)
+
+    @kernel
+    def set_mask(self, mask):
+        rtio_output((self.channel << 8) | 0 << 1 | 1, mask)
+    
+    @kernel
+    def set_length(self, length):
+        rtio_output((self.channel << 8) | 1 << 1 | 1, length)

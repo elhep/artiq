@@ -7,7 +7,8 @@ from migen.genlib.io import DifferentialOutput
 from artiq.gateware import rtio
 from artiq.gateware.rtio.phy import spi2, ad53xx_monitor, dds, grabber
 from artiq.gateware.suservo import servo, pads as servo_pads
-from artiq.gateware.rtio.phy import servo as rtservo, fastino, phaser
+from artiq.gateware.rtio.phy import servo as rtservo, fastino, phaser, ttl_serdes_7series, ttl_simple
+from artiq.gateware.rtio.phy import pmtsimtrigger
 
 
 def _eem_signal(i):
@@ -74,6 +75,9 @@ class DIO(_EEM):
                     counter = edge_counter_cls(state)
                     target.submodules += counter
                     target.rtio_channels.append(rtio.Channel.from_phy(counter))
+
+        # For PMT Simulator, see PmtSimulator
+        return phys
 
 
 class DIO_SPI(_EEM):
@@ -798,57 +802,123 @@ class Shuttler(_EEM):
         target.eem_drtio_channels.append((target.platform.request("shuttler{}_drtio_rx".format(eem), 0), target.platform.request("shuttler{}_drtio_tx".format(eem), 0)))
 
 
+
+
+
 class PmtSimulator(_EEM):
+    @classmethod
+    def io(cls, pmtsim_eems, pmtsim_aux_eems, dio_eem=None, iostandard=default_iostandard):
+        io = cls._io_pmtsims(pmtsim_eems, pmtsim_aux_eems, iostandard)
+        if dio_eem is not None:
+            io += cls._io_dio(dio_eem, iostandard)
+        return io
+
     @staticmethod
-    def io(eem, eem_aux, iostandard):
-        _io = [
-            ("pmtsim{}_spi_p".format(eem), 0,
-                Subsignal("clk", Pins(_eem_pin(eem, 0, "p"))),
-                Subsignal("mosi", Pins(_eem_pin(eem, 1, "p"))),
-                Subsignal("miso", Pins(_eem_pin(eem, 2, "p"))),
-                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "p"))),
-                iostandard(eem),
-            ),
-            ("pmtsim{}_spi_n".format(eem), 0,
-                Subsignal("clk", Pins(_eem_pin(eem, 0, "n"))),
-                Subsignal("mosi", Pins(_eem_pin(eem, 1, "n"))),
-                Subsignal("miso", Pins(_eem_pin(eem, 2, "n"))),
-                Subsignal("cs_n", Pins(_eem_pin(eem, 3, "n"))),
-                iostandard(eem),
-            ),
+    def _io_dio(dio_eem, iostandard):
+        return [
+            ("dio{}".format(dio_eem), i,
+                Subsignal("p", Pins(_eem_pin(dio_eem, i, "p"))),
+                Subsignal("n", Pins(_eem_pin(dio_eem, i, "n"))),
+                iostandard(dio_eem)
+            ) for i in range(8)
         ]
-        for ch in range(2):
-            for hit in range(2):
-                _io.append(
-                    ("pmtsim{}_ch{}_hit{}".format(eem, ch, hit), 0,
-                        Subsignal("p", Pins(_eem_pin(eem, (ch*2+hit+4), "p"))),
-                        Subsignal("n", Pins(_eem_pin(eem, (ch*2+hit+4), "n"))),
-                        iostandard(eem)
+    
+    @staticmethod
+    def _io_pmtsims(eems, eem_auxs, iostandard):
+        _io = []
+        # PmtSims
+        assert len(eems) == len(eem_auxs)
+        for eem, eem_aux in zip(eems, eem_auxs):
+            _io += [
+                ("pmtsim{}_spi_p".format(eem), 0,
+                    Subsignal("clk", Pins(_eem_pin(eem, 0, "p"))),
+                    Subsignal("mosi", Pins(_eem_pin(eem, 1, "p"))),
+                    Subsignal("miso", Pins(_eem_pin(eem, 2, "p"))),
+                    Subsignal("cs_n", Pins(_eem_pin(eem, 3, "p"))),
+                    iostandard(eem),
+                ),
+                ("pmtsim{}_spi_n".format(eem), 0,
+                    Subsignal("clk", Pins(_eem_pin(eem, 0, "n"))),
+                    Subsignal("mosi", Pins(_eem_pin(eem, 1, "n"))),
+                    Subsignal("miso", Pins(_eem_pin(eem, 2, "n"))),
+                    Subsignal("cs_n", Pins(_eem_pin(eem, 3, "n"))),
+                    iostandard(eem),
+                ),
+            ]
+            for ch in range(2):
+                for hit in range(2):
+                    _io.append(
+                        ("pmtsim{}_ch{}_hit{}".format(eem, ch, hit), 0,
+                            Subsignal("p", Pins(_eem_pin(eem, (ch*2+hit+4), "p"))),
+                            Subsignal("n", Pins(_eem_pin(eem, (ch*2+hit+4), "n"))),
+                            iostandard(eem)
+                        )
                     )
-                )
-        for ch in range(4):
-            for hit in range(2):
-                _io.append(
-                    ("pmtsim{}_ch{}_hit{}".format(eem, ch+2, hit), 0,
-                        Subsignal("p", Pins(_eem_pin(eem_aux, (ch*2+hit), "p"))),
-                        Subsignal("n", Pins(_eem_pin(eem_aux, (ch*2+hit), "n"))),
-                        iostandard(eem_aux)
+            for ch in range(4):
+                for hit in range(2):
+                    _io.append(
+                        ("pmtsim{}_ch{}_hit{}".format(eem, ch+2, hit), 0,
+                            Subsignal("p", Pins(_eem_pin(eem_aux, (ch*2+hit), "p"))),
+                            Subsignal("n", Pins(_eem_pin(eem_aux, (ch*2+hit), "n"))),
+                            iostandard(eem_aux)
+                        )
                     )
-                )
         return _io
 
     @classmethod
-    def add_std(cls, target, eem, eem_aux, ttl_out_cls, iostandard=default_iostandard):
-        cls.add_extension(target, eem, eem_aux, iostandard=iostandard)
+    def add_std(cls, target, pmtsim_eems, pmtsim_aux_eems, 
+                dio_eem=None, trigger_dio=None,
+                iostandard=default_iostandard):
+        cls.add_extension(target, pmtsim_eems, pmtsim_aux_eems,
+                          dio_eem=dio_eem, iostandard=iostandard)
+        phys = []
+        hit_overrides = []
 
-        spi_phy = spi2.SPIMaster(target.platform.request("pmtsim{}_spi_p".format(eem)),
-            target.platform.request("pmtsim{}_spi_n".format(eem)))
-        target.submodules += spi_phy
-        target.rtio_channels.append(rtio.Channel.from_phy(spi_phy, ififo_depth=4))
+        # First create logic for PMT Simulator channels. We're using external trigger so let's
+        # limit to 8 ns resolution and use ttl_simple.Output.
 
-        for ch in range(6):
-            for hit in range(2):
-                pads = target.platform.request("pmtsim{}_ch{}_hit{}".format(eem, ch, hit))
-                phy = ttl_out_cls(pads.p, pads.n)
-                target.submodules += phy
-                target.rtio_channels.append(rtio.Channel.from_phy(phy))
+        # We need to iterate over the PMT Simulator instances as there is not way to access 
+        # DIO submodule from adjecent PmtSimulator instance.
+        for eem in pmtsim_eems:
+            spi_phy = spi2.SPIMaster(target.platform.request("pmtsim{}_spi_p".format(eem)),
+                target.platform.request("pmtsim{}_spi_n".format(eem)))
+            target.submodules += spi_phy
+            target.rtio_channels.append(rtio.Channel.from_phy(spi_phy, ififo_depth=4))
+
+            for ch in range(6):
+                for hit in range(2):
+                    pads = target.platform.request("pmtsim{}_ch{}_hit{}".format(eem, ch, hit))
+                    
+                    hit_override = Signal()
+                    hit_overrides.append(hit_override)
+                    state_rtio = Signal()
+
+                    phy = ttl_simple.Output(state_rtio)
+                    target.submodules += phy
+                    target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+                    target.specials += DifferentialOutput(state_rtio | hit_override, 
+                                                          pads.p, pads.n)
+
+        # Add DIO if applicable
+        if dio_eem >= 0 and trigger_dio >= 0:
+            assert 0 <= trigger_dio <= 3
+
+            print("Adding hardware triggering for PMT SIM")
+
+            # This adds 16 RTIO channels
+            phys = DIO.add_std(target,
+                               eem=dio_eem,
+                               ttl03_cls=ttl_serdes_7series.InOut_8X,
+                               ttl47_cls=ttl_serdes_7series.InOut_8X,
+                               iostandard=iostandard, 
+                               edge_counter_cls=None)
+
+            trigger = getattr(phys[trigger_dio], "input_state")
+
+            primary_hit_overrides = Cat(hit_overrides[::2])
+            assert len(primary_hit_overrides) == 6
+
+            trigger_gen = pmtsimtrigger.PmtSimTriggerGenerator(trigger, primary_hit_overrides)
+            target.submodules += trigger_gen
+            target.rtio_channels.append(rtio.Channel.from_phy(trigger_gen))

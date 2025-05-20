@@ -654,16 +654,40 @@
                 },
                 "then": {
                     "properties": {
-                        "ports": {
+                        "pmtsim_eems": {
                             "type": "array",
                             "items": {
                                 "type": "integer"
                             },
-                            "minItems": 2,
-                            "maxItems": 2
+                            "minItems": 1,
+                            "maxItems": 12
+                        },
+                        "pmtsim_aux_eems": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            },
+                            "minItems": 1,
+                            "maxItems": 6
+                        },
+                        "dio_eem": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 11,
+                            "default": -1
+                        },
+                        "trigger_dio": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 3,
+                            "default": 0
+                        },
+                        "with_edge_counter": {
+                            "type": "boolean",
+                            "default": false
                         }
                     },
-                    "required": ["ports"]
+                    "required": ["pmtsim_eems"]
                 }
             }]
         }

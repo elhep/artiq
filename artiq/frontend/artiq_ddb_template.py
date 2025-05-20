@@ -739,7 +739,7 @@ class PeripheralManager:
     def process_pmtsim(self, rtio_offset, peripheral):
         name = self.get_name("pmtsim")
         self.gen("""
-            device_db["spi_{name}"] = {{
+            device_db["{name}_spi"] = {{
                 "type": "local",
                 "module": "artiq.coredevice.spi2",
                 "class": "SPIMaster",
@@ -749,17 +749,17 @@ class PeripheralManager:
             spi_channel=rtio_offset)
         
         self.gen("""
-            device_db["dac_{name}"] = {{
+            device_db["{name}_dac"] = {{
                 "type": "local",
                 "module": "artiq.coredevice.fit",
                 "class": "PmtSimDac",
-                "arguments": {{"spi_device": "spi_{name}"}}
+                "arguments": {{"spi_device": "{name}_spi"}}
             }}""",
             name=name)
 
         for ch, hit in product(range(6), range(2)):
             self.gen("""
-                device_db["ttl_{name}_ch{ch}_hit{hit}"] = {{
+                device_db["{name}_ttl_ch{ch}_hit{hit}"] = {{
                     "type": "local",
                     "module": "artiq.coredevice.ttl",
                     "class": "TTLOut",
@@ -770,6 +770,32 @@ class PeripheralManager:
                 ch=ch,
                 channel=rtio_offset + 1 + 2*ch + hit)
         
+        trigger_offset = 0
+        if peripheral["dio_eem"] >= 0 and peripheral['trigger_dio'] >= 0:
+            for ch in range(8):
+                self.gen("""
+                    device_db["{name}_ttl_dio_ch{ch}"] = {{
+                        "type": "local",
+                        "module": "artiq.coredevice.ttl",
+                        "class": "TTLInOut",
+                        "arguments": {{"channel": 0x{channel:06x}}}
+                    }}""",
+                    name=name,
+                    ch=ch,
+                    channel=rtio_offset + 1 + 13 + ch)
+            self.gen("""
+                device_db["{name}_trig_gen"] = {{
+                    "type": "local",
+                    "module": "artiq.coredevice.fit",
+                    "class": "PmtSimTrigger",
+                    "arguments": {{"channel": 0x{channel:06x}}}
+                }}""",
+                name=name,
+                hit=hit,
+                ch=ch,
+                channel=rtio_offset + 1 + 13 + 8)
+            trigger_offset = 9
+
         for ch in range(6):
             self.gen("""
                 device_db["{name}_ch{ch}"] = {{
@@ -777,16 +803,16 @@ class PeripheralManager:
                     "module": "artiq.coredevice.fit",
                     "class": "PmtSimChannel",
                     "arguments": {{
-                        "dac": "dac_{name}",
+                        "dac": "{name}_dac",
                         "dac_ch": [{dac_hit0}, {dac_hit1}],
-                        "ttl": ["ttl_{name}_ch{ch}_hit0", "ttl_{name}_ch{ch}_hit1"]
+                        "ttl": ["{name}_ttl_ch{ch}_hit0", "{name}_ttl_ch{ch}_hit1"]
                     }}
                 }}""",
                 name=name,
                 ch=ch,
                 dac_hit0=ch*2 + 0,
                 dac_hit1=ch*2 + 1)
-        return 1 + 2 * 6
+        return 1 + 2 * 6 + trigger_offset
 
     def process(self, rtio_offset, peripheral):
         processor = getattr(self, "process_"+str(peripheral["type"]))
