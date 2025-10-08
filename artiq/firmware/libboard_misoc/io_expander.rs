@@ -79,6 +79,22 @@ impl IoExpander {
                     gpiob: 0x13,
                 },
             },
+            // #[cfg(soc_platform = "kasli_diot")]
+            // 2 => IoExpander {
+            //     busno: 0,
+            //     port: 11,
+            //     address: 0x48,
+            //     virtual_led_mapping: &[],
+            //     iodir: [0xff, 0xe0],
+            //     out_current: [0; 2],
+            //     out_target: [0x0, 0x60], // no reset, servmod vector enabled
+            //     registers: Registers {
+            //         iodira: 0x00,
+            //         iodirb: 0x01,
+            //         gpioa: 0x12,
+            //         gpiob: 0x13,
+            //     },
+            // },
             _ => {
                 #[cfg(feature = "log")]
                 log::error!("incorrect I/O expander index");
@@ -215,6 +231,8 @@ impl IoExpander {
     }
 
     pub fn service(&mut self) -> Result<(), i2c::Error> {
+        #[cfg(feature = "log")]
+        log::info!("IoExpander service");
         for (led, port, bit) in self.virtual_led_mapping.iter() {
             let level = unsafe { (csr::virtual_leds::status_read() >> led) & 1 };
             self.set(*port, *bit, level != 0);
