@@ -257,8 +257,17 @@ fn startup() {
 
         #[cfg(any(soc_platform = "kasli_diot", all(soc_platform = "kasli", hw_rev = "v2.0")))]
         {
-            io_expander0.service().expect("I2C I/O expander #0 service failed");
-            io_expander1.service().expect("I2C I/O expander #1 service failed");
+            if let Err(e) = io_expander0.service() {
+                warn!("I2C I/O expander #0 service error: {:?}", e);
+                // Attempt a simple bus recovery and re-initialize the expander
+                let _ = board_misoc::i2c::init();
+                let _ = io_expander0.init();
+            }
+            if let Err(e) = io_expander1.service() {
+                warn!("I2C I/O expander #1 service error: {:?}", e);
+                let _ = board_misoc::i2c::init();
+                let _ = io_expander1.init();
+            }
         }
     }
 }

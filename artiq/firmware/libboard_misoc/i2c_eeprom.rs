@@ -46,8 +46,12 @@ impl EEPROM {
         Ok(())
     }
 
+    #[cfg(soc_platform = "kasli_diot")]
+    fn select(&self) -> Result<(), i2c::Error> {
+        Ok(())
+    }
+
     pub fn read<'a>(&self, addr: u8, buf: &'a mut [u8]) -> Result<(), i2c::Error> {
-        #[cfg(soc_platform = "kasli")]
         self.select()?;
 
         i2c::start(self.busno)?;
