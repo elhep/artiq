@@ -85,7 +85,7 @@ impl IoExpander {
                 port: 11,
                 address: 0x44,
                 virtual_led_mapping: &[],
-                iodir: [0x00, 0xe0],
+                iodir: [0; 2],
                 out_current: [0; 2],
                 out_target: [0x0, 0x60], // no reset, servmod vector enabled
                 registers: Registers {
