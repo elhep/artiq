@@ -113,9 +113,11 @@ fn startup() {
     setup_log_levels();
     #[cfg(has_i2c)]
     board_misoc::i2c::init().expect("I2C initialization failed");
-    #[cfg(any(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")), soc_platform = "kasli_diot"))]
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
     let (mut io_expander0, mut io_expander1);
-    #[cfg(any(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")), soc_platform = "kasli_diot"))]
+    #[cfg(soc_platform = "kasli_diot")]
+    let (mut io_expander0, mut io_expander1, mut io_expander2);
+    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
     {
         io_expander0 = board_misoc::io_expander::IoExpander::new(0).unwrap();
         io_expander1 = board_misoc::io_expander::IoExpander::new(1).unwrap();
@@ -134,6 +136,14 @@ fn startup() {
         io_expander0.service().unwrap();
         io_expander1.service().unwrap();
     }
+
+    #[cfg(soc_platform = "kasli_diot")]
+    {
+        io_expander2 = board_misoc::io_expander::IoExpander::new(2).unwrap();
+        io_expander2.init().expect("I2C I/O expander #2 initialization failed");
+        io_expander2.service().unwrap();
+    }
+
     rtio_clocking::init();
 
     #[cfg(has_drtio_eem)]
@@ -267,6 +277,14 @@ fn startup() {
                 warn!("I2C I/O expander #1 service error: {:?}", e);
                 let _ = board_misoc::i2c::init();
                 let _ = io_expander1.init();
+            }
+        }
+        #[cfg(soc_platform = "kasli_diot")]
+        {
+            if let Err(e) = io_expander2.service() {
+                warn!("I2C I/O expander #2 service error: {:?}", e);
+                let _ = board_misoc::i2c::init();
+                let _ = io_expander2.init();
             }
         }
     }
