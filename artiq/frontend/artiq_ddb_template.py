@@ -808,6 +808,130 @@ class PeripheralManager:
                 lvds=1+i*2+1,
                 channel=rtio_offset+1+i*2+1)
         return 15
+    
+    # heavily WIP:
+    def process_urukul_diot(self, rtio_offset, peripheral):
+        urukul_name = self.get_name("urukul_diot")
+        synchronization = peripheral["synchronization"]
+        channel = count(0)
+        pll_en = peripheral["pll_en"]
+        clk_div = peripheral.get("clk_div")
+        if clk_div is None:
+            clk_div = 0 if pll_en else 1
+
+        self.gen("""
+            device_db["eeprom_{name}"] = {{
+                "type": "local",
+                "module": "artiq.coredevice.diot_i2c",
+                "class": "KasliDIOTEEPROM",
+                "arguments": {{"slot": "SLOT{slot}"}}
+            }}
+
+            device_db["spi_{name}"] = {{
+                "type": "local",
+                "module": "artiq.coredevice.spi2",
+                "class": "SPIMaster",
+                "arguments": {{"channel": 0x{channel:06x}}}
+            }}""",
+            name=urukul_name,
+            slot=peripheral["slot"],
+            channel=rtio_offset+next(channel))
+        
+        if synchronization:
+            self.gen("""
+                device_db["ttl_{name}_sync"] = {{
+                    "type": "local",
+                    "module": "artiq.coredevice.ttl",
+                    "class": "TTLClockGen",
+                    "arguments": {{"channel": 0x{channel:06x}, "acc_width": 4}}
+                }}""",
+                name=urukul_name,
+                channel=rtio_offset+next(channel))
+        self.gen("""
+            device_db["ttl_{name}_io_update"] = {{
+                "type": "local",
+                "module": "artiq.coredevice.ttl",
+                "class": "TTLOut",
+                "arguments": {{"channel": 0x{channel:06x}}}
+            }}""",
+            name=urukul_name,
+            channel=rtio_offset+next(channel))
+        for i in range(4):
+            self.gen("""
+                device_db["ttl_{name}_sw{uchn}"] = {{
+                    "type": "local",
+                    "module": "artiq.coredevice.ttl",
+                    "class": "TTLOut",
+                    "arguments": {{"channel": 0x{channel:06x}}}
+                }}""",
+                name=urukul_name,
+                uchn=i,
+                channel=rtio_offset+next(channel))
+        self.gen("""
+            device_db["{name}_cpld"] = {{
+                "type": "local",
+                "module": "artiq.coredevice.urukul",
+                "class": "CPLD",
+                "arguments": {{
+                    "spi_device": "spi_{name}",
+                    "sync_device": {sync_device},
+                    "io_update_device": "ttl_{name}_io_update",
+                    "refclk": {refclk},
+                    "clk_sel": {clk_sel},
+                    "clk_div": {clk_div}
+                }}
+            }}""",
+            name=urukul_name,
+            sync_device="\"ttl_{name}_sync\"".format(name=urukul_name) if synchronization else "None",
+            refclk=peripheral.get("refclk", self.primary_description["rtio_frequency"]),
+            clk_sel=peripheral["clk_sel"],
+            clk_div=clk_div)
+        dds = peripheral["dds"]
+        pll_vco = peripheral.get("pll_vco")
+        for i in range(4):
+            if dds == "ad9910":
+                self.gen("""
+                    device_db["{name}_ch{uchn}"] = {{
+                        "type": "local",
+                        "module": "artiq.coredevice.ad9910",
+                        "class": "AD9910",
+                        "arguments": {{
+                            "pll_n": {pll_n},
+                            "pll_en": {pll_en},
+                            "chip_select": {chip_select},
+                            "cpld_device": "{name}_cpld"{sw}{pll_vco}{sync_delay_seed}{io_update_delay}
+                        }}
+                    }}""",
+                    name=urukul_name,
+                    chip_select=4 + i,
+                    uchn=i,
+                    sw=",\n        \"sw_device\": \"ttl_{name}_sw{uchn}\"".format(name=urukul_name, uchn=i),
+                    pll_vco=",\n        \"pll_vco\": {}".format(pll_vco) if pll_vco is not None else "",
+                    pll_n=peripheral.get("pll_n", 32), pll_en=pll_en,
+                    sync_delay_seed=",\n        \"sync_delay_seed\": \"eeprom_{}:{}\"".format(urukul_name, 64 + 4*i) if synchronization else "",
+                    io_update_delay=",\n        \"io_update_delay\": \"eeprom_{}:{}\"".format(urukul_name, 64 + 4*i) if synchronization else "")
+            elif dds == "ad9912":
+                self.gen("""
+                    device_db["{name}_ch{uchn}"] = {{
+                        "type": "local",
+                        "module": "artiq.coredevice.ad9912",
+                        "class": "AD9912",
+                        "arguments": {{
+                            "pll_n": {pll_n},
+                            "pll_en": {pll_en},
+                            "chip_select": {chip_select},
+                            "cpld_device": "{name}_cpld"{sw}{pll_vco}
+                        }}
+                    }}""",
+                    name=urukul_name,
+                    chip_select=4 + i,
+                    uchn=i,
+                    sw=",\n        \"sw_device\": \"ttl_{name}_sw{uchn}\"".format(name=urukul_name, uchn=i),
+                    pll_vco=",\n        \"pll_vco\": {}".format(pll_vco) if pll_vco is not None else "",
+                    pll_n=peripheral.get("pll_n", 8), pll_en=pll_en)
+            else:
+                raise ValueError
+        return next(channel)
 
     def process(self, rtio_offset, peripheral):
         processor = getattr(self, "process_"+str(peripheral["type"]))

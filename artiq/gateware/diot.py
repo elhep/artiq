@@ -6,6 +6,7 @@ from migen.genlib.cdc import MultiReg
 from migen.fhdl.module import _ModuleProxy
 
 from artiq.gateware import rtio
+from artiq.gateware.rtio.phy import spi2, dds
 
 
 def _diot_signal(i):
@@ -88,3 +89,132 @@ class OhwrDiotLoopback(_DIOT):
             phys.append(phy)
             target.submodules += phy
             target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+
+class UrukulDIOT(_DIOT):
+    @staticmethod
+    def io(slot, iostandard):
+        ios = [
+            ("urukul_diot{}_spi_p".format(slot), 0,
+                Subsignal("clk", Pins(_diot_pin(slot, 0, "p"))),            # G1
+                Subsignal("mosi", Pins(_diot_pin(slot, 1, "p"))),           # M1
+                Subsignal("miso", Pins(_diot_pin(slot, 2, "p"))),           # K3
+                Subsignal("cs_n", Pins(
+                    *(_diot_pin(slot, i + 3, "p") for i in range(3)))),     # [H2, G2, E3 ]
+                iostandard(slot),
+            ),
+            ("urukul_diot{}_spi_n".format(slot), 0,
+                Subsignal("clk", Pins(_diot_pin(slot, 0, "n"))),
+                Subsignal("mosi", Pins(_diot_pin(slot, 1, "n"))),
+                Subsignal("miso", Pins(_diot_pin(slot, 2, "n"))),           # K1
+                Subsignal("cs_n", Pins(
+                    *(_diot_pin(slot, i + 3, "n") for i in range(3)))),
+                iostandard(slot),
+            ),
+        ]
+               
+        ttls = [
+                    # EEM 0
+                    (6, slot, "io_update"),                             # D2
+                    (7, slot, "dds_reset_sync_in", Misc("IOB=TRUE")),   # B2?
+
+                    # EEM 1
+                    (8, slot, "sync_clk"),                              # H1 ?
+                     (9, slot, "sync_in"),                              # L1
+                     (10, slot, "io_update_ret"),                        # J1 -> add io_update_ret_n as J2
+                     (11, slot, "nu_mosi3"),                             # F2
+                     (12, slot, "sw0"),                                  # E2
+                     (13, slot, "sw1"),                                  # D1
+                     (14, slot, "sw2"),                                  # C2
+                     (15, slot, "sw3")]                                  # B1
+        
+        for i, j, sig, *extra_args in ttls:
+            ios.append(
+                ("urukul_diot{}_{}".format(slot, sig), 0,
+                    Subsignal("p", Pins(_diot_pin(j, i, "p"))),
+                    Subsignal("n", Pins(_diot_pin(j, i, "n"))),
+                    iostandard(j), *extra_args
+                ))
+        return ios
+
+    @staticmethod
+    def io_qspi(slot, iostandard):
+        ios = [
+            ("urukul_diot{}_spi_p".format(slot), 0,
+                Subsignal("clk", Pins(_diot_pin(slot, 0, "p"))),
+                Subsignal("mosi", Pins(_diot_pin(slot, 1, "p"))),
+                Subsignal("cs_n", Pins(
+                    _diot_pin(slot, 3, "p"), _diot_pin(slot, 4, "p"))),
+                iostandard(slot),
+            ),
+            ("urukul_diot{}_spi_n".format(slot), 0,
+                Subsignal("clk", Pins(_diot_pin(slot, 0, "n"))),
+                Subsignal("mosi", Pins(_diot_pin(slot, 1, "n"))),
+                Subsignal("cs_n", Pins(
+                    _diot_pin(slot, 3, "n"), _diot_pin(slot, 4, "n"))),
+                iostandard(slot),
+            ),
+        ]
+        ttls = [(6, slot, "io_update"),
+                (7, slot, "dds_reset_sync_in"),
+                (12, slot, "sw0"),
+                (13, slot, "sw1"),
+                (14, slot, "sw2"),
+                (15, slot, "sw3")]
+        for i, j, sig in ttls:
+            ios.append(
+                ("urukul_diot{}_{}".format(slot, sig), 0,
+                    Subsignal("p", Pins(_diot_pin(j, i, "p"))),
+                    Subsignal("n", Pins(_diot_pin(j, i, "n"))),
+                    iostandard(j)
+                ))
+        ios += [
+            ("urukul_diot{}_qspi_p".format(slot), 0,
+                Subsignal("cs", Pins(_diot_pin(slot, 5, "p")), iostandard(slot)),
+                Subsignal("clk", Pins(_diot_pin(slot, 2, "p")), iostandard(slot)),
+                Subsignal("mosi0", Pins(_diot_pin(slot, 8, "p")), iostandard(slot)),
+                Subsignal("mosi1", Pins(_diot_pin(slot, 9, "p")), iostandard(slot)),
+                Subsignal("mosi2", Pins(_diot_pin(slot, 10, "p")), iostandard(slot)),
+                Subsignal("mosi3", Pins(_diot_pin(slot, 11, "p")), iostandard(slot)),
+            ),
+            ("urukul_diot{}_qspi_n".format(slot), 0,
+                Subsignal("cs", Pins(_diot_pin(slot, 5, "n")), iostandard(slot)),
+                Subsignal("clk", Pins(_diot_pin(slot, 2, "n")), iostandard(slot)),
+                Subsignal("mosi0", Pins(_diot_pin(slot, 8, "n")), iostandard(slot)),
+                Subsignal("mosi1", Pins(_diot_pin(slot, 9, "n")), iostandard(slot)),
+                Subsignal("mosi2", Pins(_diot_pin(slot, 10, "n")), iostandard(slot)),
+                Subsignal("mosi3", Pins(_diot_pin(slot, 11, "n")), iostandard(slot)),
+            ),
+        ]
+        return ios
+
+    @classmethod
+    def add_std(cls, target, slot, ttl_out_cls, dds_type, sync_gen_cls=None, iostandard=default_iostandard):
+        cls.add_extension(target, slot, iostandard=iostandard)
+
+        spi_phy = spi2.SPIMaster(target.platform.request("urukul_diot{}_spi_p".format(slot)),
+            target.platform.request("urukul_diot{}_spi_n".format(slot)))
+        target.submodules += spi_phy
+        target.rtio_channels.append(rtio.Channel.from_phy(spi_phy, ififo_depth=4))
+
+        pads = target.platform.request("urukul_diot{}_dds_reset_sync_in".format(slot))
+        if sync_gen_cls is not None:  # AD9910 variant and SYNC_IN from slot
+            phy = sync_gen_cls(pad=pads.p, pad_n=pads.n, ftw_width=4)
+            target.submodules += phy
+            target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+        pads = target.platform.request("urukul_diot{}_io_update".format(slot))
+        io_upd_phy = ttl_out_cls(pads.p, pads.n)
+        target.submodules += io_upd_phy
+        target.rtio_channels.append(rtio.Channel.from_phy(io_upd_phy))
+
+        dds_monitor = dds.UrukulMonitor(spi_phy, io_upd_phy, dds_type)
+        target.submodules += dds_monitor
+        spi_phy.probes.extend(dds_monitor.probes)
+
+        for signal in "sw0 sw1 sw2 sw3".split():
+            pads = target.platform.request("urukul_diot{}_{}".format(slot, signal))
+            phy = ttl_out_cls(pads.p, pads.n)
+            target.submodules += phy
+            target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
