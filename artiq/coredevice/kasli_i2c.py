@@ -1,7 +1,7 @@
 from numpy import int32
 
 from artiq.experiment import *
-from artiq.coredevice.i2c import i2c_write_many, i2c_read_many, i2c_poll
+from artiq.coredevice.i2c import i2c_write_many, i2c_read_many, i2c_poll, I2CError
 
 
 port_mapping = {
@@ -21,33 +21,25 @@ port_mapping = {
     "SFP1": 9,
     "SFP2": 10,
     "LOC0": 11,
+    # DIOT ports represent expander port
+    "DIOT0": 0,
+    "DIOT1": 2,
+    "DIOT2": 3,
+    "DIO3": 1,
+    "DIO4": 4,
+    "DIO5": 7,
+    "DIO6": 6,
+    "DIO7": 5,
 }
 
 
-class KasliEEPROM:
+class _KasliEEPROM:
     def __init__(self, dmgr, port, address=0xa0, busno=0,
             core_device="core", sw0_device="i2c_switch0", sw1_device="i2c_switch1"):
         self.core = dmgr.get(core_device)
-        self.sw0 = dmgr.get(sw0_device)
-        self.sw1 = dmgr.get(sw1_device)
         self.busno = busno
         self.port = port_mapping[port]
         self.address = address  # i2c 8 bit
-
-    @kernel
-    def select(self):
-        mask = 1 << self.port
-        if self.port < 8:
-            self.sw0.set(self.port)
-            self.sw1.unset()
-        else:
-            self.sw0.unset()
-            self.sw1.set(self.port - 8)
-
-    @kernel
-    def deselect(self):
-        self.sw0.unset()
-        self.sw1.unset()
 
     @kernel
     def write_i32(self, addr, value):
@@ -75,3 +67,60 @@ class KasliEEPROM:
         finally:
             self.deselect()
         return value
+
+
+class KasliEEPROM(_KasliEEPROM):
+    def __init__(self, dmgr, port, address=0xa0, busno=0,
+            core_device="core", sw0_device="i2c_switch0", sw1_device="i2c_switch1"):
+        super().__init__(dmgr, port, address, busno, core_device, sw0_device, sw1_device)
+        self.sw0 = dmgr.get(sw0_device)
+        self.sw1 = dmgr.get(sw1_device)
+    
+    @kernel
+    def select(self):
+        mask = 1 << self.port
+        if self.port < 8:
+            self.sw0.set(self.port)
+            self.sw1.unset()
+        else:
+            self.sw0.unset()
+            self.sw1.set(self.port - 8)
+
+    @kernel
+    def deselect(self):
+        self.sw0.unset()
+        self.sw1.unset()
+
+
+class KasliDIOTEEPROM(_KasliEEPROM):
+    def __init__(self, dmgr, port, address=0xa0, busno=1, core_device="core", 
+                 sw0_device="i2c_switch1"):
+        super().__init__(dmgr, port, address, busno, core_device)
+        self.sw = dmgr.get(sw0_device)
+    
+    @kernel
+    def select(self):
+        self.sw.set(3)  # SHARED
+        try:
+            # PCA9539 I/O expander
+            # Make sure no peripheral is selected
+            i2c_write_many(self.busno, 0xEC, 0x02, [0])
+            # Select given peripheral
+            i2c_write_many(self.busno, 0xEC, 0x02, [1 << self.port])
+        except I2CError:
+            # MCP23017 I/O expander
+            # Make sure no peripheral is selected
+            i2c_write_many(self.busno, 0x44, 0x02, [0])
+            # Select given peripheral
+            i2c_write_many(self.busno, 0x44, 0x09, [1 << self.port])
+
+    @kernel
+    def deselect(self):
+        self.sw.set(3)  # SHARED
+        try:
+            # PCA9539 I/O expander
+            i2c_write_many(self.busno, 0xEC, 0x02, [0])
+        except I2CError:
+            # MCP23017 I/O expander
+            i2c_write_many(self.busno, 0x44, 0x02, [0])
+    

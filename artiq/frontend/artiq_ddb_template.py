@@ -232,17 +232,33 @@ class PeripheralManager:
             clk_div = 0 if pll_en else 1
         proto_rev = peripheral["proto_rev"]
 
+        dest = "" if destination == 0 else "_{}".format(destination)
+
+        if peripheral.get("ports", None) is None:
+            # No ports - assume DIOT variant, aux lines always present
+            aux_lines_present = True
+            eeprom_port = f"DIOT{peripheral['slot']}"
+            eeprom_class = "KasliDIOTEEPROM"
+            sw1_device = ""
+        else:
+            aux_lines_present = len(peripheral["ports"]) > 1
+            eeprom_port = f"EEM{peripheral['ports'][0]}"
+            eeprom_class = "KasliEEPROM"
+            sw1_device = """,
+                    "sw1_device": "i2c_switch1{dest}"""
+
         self.gen("""
             device_db["eeprom_{name}"] = {{
                 "type": "local",
                 "module": "artiq.coredevice.kasli_i2c",
-                "class": "KasliEEPROM",
+                "class": "{eeprom_class}",
                 "arguments": {{
-                    "port": "EEM{eem}",
+                    "port": "{eeprom_port}",
                     "busno": {busno},
-                    "sw0_device": "i2c_switch0{dest}",
-                    "sw1_device": "i2c_switch1{dest}"}}
+                    "sw0_device": "i2c_switch0{dest}"{sw1_device}
                 }}
+            }}
+
             device_db["spi_{name}"] = {{
                 "type": "local",
                 "module": "artiq.coredevice.spi2",
@@ -250,9 +266,11 @@ class PeripheralManager:
                 "arguments": {{"channel": 0x{channel:06x}}}
             }}""",
             name=urukul_name,
-            eem=peripheral["ports"][0],
+            eeprom_port=eeprom_port,
+            eeprom_class=eeprom_class,
             busno=busno,
-            dest="" if destination == 0 else "_{}".format(destination),
+            dest=dest,
+            sw1_device=sw1_device,
             channel=rtio_offset+next(channel))
         if synchronization:
             self.gen("""
@@ -273,7 +291,7 @@ class PeripheralManager:
             }}""",
             name=urukul_name,
             channel=rtio_offset+next(channel))
-        if len(peripheral["ports"]) > 1:
+        if aux_lines_present:
             for i in range(4):
                 self.gen("""
                     device_db["ttl_{name}_sw{uchn}"] = {{
@@ -325,7 +343,7 @@ class PeripheralManager:
                     name=urukul_name,
                     chip_select=4 + i,
                     uchn=i,
-                    sw=",\n        \"sw_device\": \"ttl_{name}_sw{uchn}\"".format(name=urukul_name, uchn=i) if len(peripheral["ports"]) > 1 else "",
+                    sw=",\n        \"sw_device\": \"ttl_{name}_sw{uchn}\"".format(name=urukul_name, uchn=i) if aux_lines_present else "",
                     pll_vco=",\n        \"pll_vco\": {}".format(pll_vco) if pll_vco is not None else "",
                     pll_n=peripheral.get("pll_n", 32), pll_en=pll_en,
                     sync_delay_seed=",\n        \"sync_delay_seed\": \"eeprom_{}:{}\"".format(urukul_name, 64 + 4*i) if synchronization else "",
@@ -346,7 +364,7 @@ class PeripheralManager:
                     name=urukul_name,
                     chip_select=4 + i,
                     uchn=i,
-                    sw=",\n        \"sw_device\": \"ttl_{name}_sw{uchn}\"".format(name=urukul_name, uchn=i) if len(peripheral["ports"]) > 1 else "",
+                    sw=",\n        \"sw_device\": \"ttl_{name}_sw{uchn}\"".format(name=urukul_name, uchn=i) if aux_lines_present else "",
                     pll_vco=",\n        \"pll_vco\": {}".format(pll_vco) if pll_vco is not None else "",
                     pll_n=peripheral.get("pll_n", 8), pll_en=pll_en)
             else:
