@@ -685,25 +685,16 @@
                     "required": ["ports"]
                 }
             },{
-<<<<<<< HEAD
                 "title": "songbird",
                 "if": {
                     "properties": {
                         "type": {
                             "const": "songbird"
-=======
-                "title": "DIOT OHWR Loopback",
-                "if": {
-                    "properties": {
-                        "type": {
-                            "const": "ohwr_diot_loopback"
->>>>>>> 3ec5d18ba (diot: added CERN Loopback support)
                         }
                     }
                 },
                 "then": {
                     "properties": {
-<<<<<<< HEAD
                         "ports": {
                             "type": "array",
                             "items": {
@@ -741,7 +732,18 @@
                             "description": "Number of ROI engines."
                         }
                     }
-=======
+                }
+            },{
+                "title": "DIOT OHWR Loopback",
+                "if": {
+                    "properties": {
+                        "type": {
+                            "const": "ohwr_diot_loopback"
+                        }
+                    }
+                },
+                "then": {
+                    "properties": {
                         "slot": {
                             "type": "integer",
                             "minimum": 0,
@@ -749,7 +751,6 @@
                         }
                     },
                     "required": ["slot"]
->>>>>>> 3ec5d18ba (diot: added CERN Loopback support)
                 }
             }]
         },

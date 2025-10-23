@@ -241,11 +241,7 @@ class ProgrammerXC7(Programmer):
         Programmer.__init__(self, client, preinit_script)
         self._proxy = proxy
 
-<<<<<<< HEAD
-        if board not in ["efc", "phaser"]:
-=======
-        if board not in ["efc", "kasli_diot"]:
->>>>>>> 6b8c250c1 (artiq_flash: add preliminary support for Kasli DIOT)
+        if board not in ["efc", "phaser", "kasli_diot"]:
             add_commands(self._board_script,
                 "source {boardfile}",
                 boardfile=self._transfer_script("board/{}.cfg".format(board)))
@@ -377,7 +373,6 @@ def main():
 
     programmer = config["programmer"](client, preinit_script=args.preinit_command)
 
-<<<<<<< HEAD
     for cmd, regions in cmds:
         if cmd == "write":
             for region in regions:
@@ -390,23 +385,6 @@ def main():
                 programmer.write_binary(*config[region], path)
         elif cmd == "load":
             gateware_bit = artifact_path(binary_dir, "gateware", "top.bit")
-=======
-    for action in args.action:
-        if action == "gateware":
-            gateware_bin = fetch_bin(binary_dir, ["gateware"], args.srcbuild)
-            programmer.write_binary(*config["gateware"], gateware_bin)
-        elif action == "bootloader":
-            bootloader_bin = fetch_bin(binary_dir, ["bootloader"], args.srcbuild)
-            programmer.write_binary(*config["bootloader"], bootloader_bin)
-        elif action == "storage":
-            storage_img = args.storage
-            programmer.write_binary(*config["storage"], storage_img)
-        elif action == "firmware":
-            firmware_fbi = fetch_bin(binary_dir, ["satman", "runtime"], args.srcbuild)
-            programmer.write_binary(*config["firmware"], firmware_fbi)
-        elif action == "load":
-            gateware_bit = artifact_path(binary_dir, "gateware", "top.bit", srcbuild=args.srcbuild)
->>>>>>> 6b8c250c1 (artiq_flash: add preliminary support for Kasli DIOT)
             programmer.load(gateware_bit, 0)
         elif cmd == "start":
             programmer.start()
