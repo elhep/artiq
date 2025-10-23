@@ -117,7 +117,7 @@ fn startup() {
     let (mut io_expander0, mut io_expander1);
     #[cfg(soc_platform = "kasli_diot")]
     let (mut io_expander0, mut io_expander1, mut io_expander2);
-    #[cfg(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")))]
+    #[cfg(any(all(soc_platform = "kasli", any(hw_rev = "v2.0", hw_rev = "v2.1")), soc_platform = "kasli_diot"))]
     {
         io_expander0 = board_misoc::io_expander::IoExpander::new(0).unwrap();
         io_expander1 = board_misoc::io_expander::IoExpander::new(1).unwrap();
