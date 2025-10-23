@@ -384,7 +384,7 @@ def main():
                     path = fetch_bin(binary_dir, [region], args.srcbuild)
                 programmer.write_binary(*config[region], path)
         elif cmd == "load":
-            gateware_bit = artifact_path(binary_dir, "gateware", "top.bit")
+            gateware_bit = artifact_path(binary_dir, "gateware", "top.bit", srcbuild=args.srcbuild)
             programmer.load(gateware_bit, 0)
         elif cmd == "start":
             programmer.start()
