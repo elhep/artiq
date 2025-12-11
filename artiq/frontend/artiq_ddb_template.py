@@ -782,7 +782,7 @@ class PeripheralManager:
                     }}""",
                     name=name,
                     ch=ch,
-                    channel=rtio_offset + 1 + 13 + ch)
+                    channel=rtio_offset + 1 + 12 + ch)
             self.gen("""
                 device_db["{name}_trig_gen"] = {{
                     "type": "local",
@@ -793,7 +793,7 @@ class PeripheralManager:
                 name=name,
                 hit=hit,
                 ch=ch,
-                channel=rtio_offset + 1 + 13 + 8)
+                channel=rtio_offset + 1 + 12 + 8)
             trigger_offset = 9
 
         for ch in range(6):

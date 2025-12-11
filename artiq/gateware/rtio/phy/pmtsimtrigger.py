@@ -5,7 +5,7 @@ from artiq.gateware.rtio import rtlink
 
 
 class PmtSimTriggerGenerator(Module):
-    def __init__(self, trigger_in, primary_triggers_out):
+    def __init__(self, trigger_in, async_trigger_in, primary_triggers_out):
         # Address mapping:
         # a[0]: write not read
         # a[1..2] == 00: output trigger mask, 1 - trigger enabled, 0 - trigger disabled
@@ -61,6 +61,7 @@ class PmtSimTriggerGenerator(Module):
         ]
 
         self.comb += [
+            If(trigger_length == 0, trigger_active.eq(trigger_in))
             trigger_active.eq(trigger_counter > 0),
             primary_triggers_out.eq(
                 Replicate(trigger_active, len(primary_triggers_out)) & trigger_mask
