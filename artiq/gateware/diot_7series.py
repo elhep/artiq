@@ -20,9 +20,14 @@ def peripheral_urukul(module, peripheral, **kwargs):
         peripheral["dds"], peripheral["proto_rev"], sync_gen_cls, **kwargs)
 
 
+def peripheral_fastino(module, peripheral, **kwargs):
+    diot.Fastino.add_std(module, peripheral["slot"], peripheral["log2_width"], **kwargs)
+
+
 peripheral_processors = {
     "ohwr_diot_loopback": peripheral_ohwr_diot_loopback,
-    "urukul": peripheral_urukul
+    "urukul": peripheral_urukul,
+    "fastino": peripheral_fastino,
 }
 
 

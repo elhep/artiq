@@ -158,7 +158,7 @@
             "properties": {
                 "type": {
                     "type": "string",
-                    "enum": ["dio", "dio_spi", "urukul", "urukul_diot", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "phaser", "hvamp", "shuttler", "songbird", "coaxpress_sfp", "ohwr_diot_loopback"]
+                    "enum": ["dio", "dio_spi", "urukul", "urukul_diot", "novogorny", "sampler", "suservo", "zotino", "grabber", "mirny", "fastino", "fastino_diot", "phaser", "hvamp", "shuttler", "songbird", "coaxpress_sfp", "ohwr_diot_loopback"]
                 },
                 "board": {
                     "type": "string"
@@ -606,13 +606,21 @@
                             "minItems": 1,
                             "maxItems": 1
                         },
+                        "slot": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 7
+                        },
                         "log2_width": {
                             "type": "integer",
                             "default": 0,
                             "description": "Width of DAC channel group (logarithm base 2)"
                         }
                     },
-                    "required": ["ports"]
+                    "oneOf": [
+                        {"required": ["ports"]},
+                        {"required": ["slot"]}
+                    ]
                 }
             }, {
                 "title": "Phaser",

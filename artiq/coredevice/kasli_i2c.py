@@ -25,11 +25,11 @@ port_mapping = {
     "DIOT0": 0,
     "DIOT1": 2,
     "DIOT2": 3,
-    "DIO3": 1,
-    "DIO4": 4,
-    "DIO5": 7,
-    "DIO6": 6,
-    "DIO7": 5,
+    "DIOT3": 1,
+    "DIOT4": 4,
+    "DIOT5": 7,
+    "DIOT6": 6,
+    "DIOT7": 5,
 }
 
 

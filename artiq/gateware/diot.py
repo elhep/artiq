@@ -4,7 +4,7 @@ from migen.genlib.io import DifferentialInput, DifferentialOutput
 from migen.genlib.cdc import MultiReg
 
 from artiq.gateware import rtio
-from artiq.gateware.rtio.phy import spi2, dds
+from artiq.gateware.rtio.phy import spi2, dds, fastino
 
 
 def _diot_signal(i):
@@ -217,3 +217,27 @@ class Urukul(_DIOT):
             phy = ttl_out_cls(pads.p, pads.n)
             target.submodules += phy
             target.rtio_channels.append(rtio.Channel.from_phy(phy))
+
+
+class Fastino(_DIOT):
+    @staticmethod
+    def io(slot, iostandard):
+        return [
+            ("fastino_diot{}_ser_{}".format(slot, pol), 0,
+                Subsignal("clk", Pins(_diot_pin(slot, 0, pol))),
+                Subsignal("mosi", Pins(*(_diot_pin(slot, i, pol)
+                    for i in range(1, 7)))),
+                Subsignal("miso", Pins(_diot_pin(slot, 7, pol)),
+                          Misc("DIFF_TERM=TRUE")),
+                iostandard(slot),
+            ) for pol in "pn"]
+
+    @classmethod
+    def add_std(cls, target, slot, log2_width, iostandard=default_iostandard):
+        cls.add_extension(target, slot, iostandard=iostandard)
+
+        phy = fastino.Fastino(target.platform.request("fastino_diot{}_ser_p".format(slot)),
+            target.platform.request("fastino_diot{}_ser_n".format(slot)),
+            log2_width=log2_width)
+        target.submodules += phy
+        target.rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=4))
