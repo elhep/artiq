@@ -72,7 +72,7 @@ class StandaloneBase(MiniSoC, AMPSoC):
                          ethmac_nrxslots=4,
                          ethmac_ntxslots=4,
                          clk_freq=kwargs.get("rtio_frequency", 125.0e6),
-                         rtio_sys_merge=True,
+                         rtio_sys_merge=False,
                          **kwargs)
         AMPSoC.__init__(self)
         add_identifier(self, gateware_identifier_str=gateware_identifier_str)
